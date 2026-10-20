@@ -10,7 +10,8 @@ import {
   FileCode, 
   Image as ImageIcon,
   CheckCircle2,
-  AlertCircle
+  ExternalLink,
+  Layers
 } from 'lucide-react';
 import { Asset } from '../types/itm';
 import { useITM } from '../context/ITMContext';
@@ -35,48 +36,76 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
   const [copiedImage, setCopiedImage] = useState(false);
   const [layout, setLayout] = useState<'standard' | 'zebra' | 'compact'>('standard');
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const targetAssets: Asset[] = batchAssets && batchAssets.length > 0 ? batchAssets : (asset ? [asset] : []);
+  // Memoize targetAssets to avoid generating new array reference on every render
+  const targetAssets = React.useMemo<Asset[]>(() => {
+    if (batchAssets && batchAssets.length > 0) return batchAssets;
+    if (asset) return [asset];
+    return [];
+  }, [asset?.id, asset?.assetCode, batchAssets]);
+
+  // Stable string key of asset IDs to trigger generation exactly once
+  const assetKey = React.useMemo(() => {
+    return targetAssets.map(a => `${a.id}:${a.assetCode}`).join('|');
+  }, [targetAssets]);
 
   useEffect(() => {
+    let isMounted = true;
+    if (!assetKey || targetAssets.length === 0) {
+      setQrMap({});
+      return;
+    }
+
     const generateQRs = async () => {
+      setIsGenerating(true);
       const map: Record<string, string> = {};
-      for (const item of targetAssets) {
-        try {
-          const payload = JSON.stringify({
-            code: item.assetCode,
-            name: item.employeeOrDeviceName,
-            category: item.category,
-            dept: item.department,
-            sn: item.specificationOrSN,
-          });
-          const dataUrl = await QRCode.toDataURL(payload, {
-            width: 320,
-            margin: 1,
-            color: {
-              dark: '#000000',
-              light: '#ffffff',
-            },
-          });
-          map[item.id] = dataUrl;
-        } catch (err) {
-          console.error('QR generation error:', err);
-        }
+      
+      // Generate QRs in parallel for speed
+      await Promise.all(
+        targetAssets.map(async (item) => {
+          try {
+            const payload = JSON.stringify({
+              code: item.assetCode,
+              name: item.employeeOrDeviceName,
+              category: item.category,
+              dept: item.department,
+              sn: item.specificationOrSN,
+            });
+            const dataUrl = await QRCode.toDataURL(payload, {
+              width: 240,
+              margin: 1,
+              color: {
+                dark: '#000000',
+                light: '#ffffff',
+              },
+            });
+            map[item.id] = dataUrl;
+          } catch (err) {
+            console.error('QR generation error for asset', item.assetCode, err);
+          }
+        })
+      );
+
+      if (isMounted) {
+        setQrMap(map);
+        setIsGenerating(false);
       }
-      setQrMap(map);
     };
 
-    if (targetAssets.length > 0) {
-      generateQRs();
-    }
-  }, [targetAssets]);
+    generateQRs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [assetKey]);
 
   if (targetAssets.length === 0) return null;
 
   const handlePrint = () => {
     const html = buildQRLabelsHtml(targetAssets, settings.companyName, qrMap, layout, false);
     executePrint(html);
-    setStatusNotice('Print dialog initiated. If your browser blocks popups, use "Save Label as Image" or "Download HTML Sheet".');
+    setStatusNotice('Print dialog initiated! If your browser restricts iframe popups, click "Save PNG Sticker" or "Download HTML Sheet".');
     setTimeout(() => setStatusNotice(null), 6000);
   };
 
@@ -85,7 +114,7 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
     if (!qrUrl) return;
     try {
       await downloadAssetLabelImage(item, settings.companyName, qrUrl, layout);
-      setStatusNotice(`Saved label image for ${item.assetCode} as high-res PNG!`);
+      setStatusNotice(`Saved high-res 300-DPI label for ${item.assetCode}!`);
       setTimeout(() => setStatusNotice(null), 4000);
     } catch (e) {
       console.error(e);
@@ -99,20 +128,20 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
     const ok = await copyAssetLabelImageToClipboard(item, settings.companyName, qrUrl, layout);
     if (ok) {
       setCopiedImage(true);
-      setStatusNotice('Copied high-res label tag image to clipboard! You can paste into Word, Excel or Docs.');
+      setStatusNotice('Copied label tag image to clipboard! You can paste directly into Word, Excel or Docs.');
       setTimeout(() => {
         setCopiedImage(false);
         setStatusNotice(null);
       }, 4000);
     } else {
-      setStatusNotice('Clipboard image copy not supported in this browser. Please use "Save PNG Image" instead.');
+      setStatusNotice('Clipboard copy not supported in this browser. Please use "Save PNG Sticker".');
     }
   };
 
   const handleDownloadHtml = () => {
     const html = buildQRLabelsHtml(targetAssets, settings.companyName, qrMap, layout, true);
     downloadPrintableHtml(html, `ITM_QR_Labels_${new Date().toISOString().substring(0, 10)}.html`);
-    setStatusNotice('Downloaded self-contained HTML print sheet. Open it in any browser tab to print directly!');
+    setStatusNotice('Downloaded self-contained HTML print sheet. Open it in any browser window to print natively!');
     setTimeout(() => setStatusNotice(null), 5000);
   };
 
@@ -126,7 +155,7 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
       <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 bg-slate-50/80">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 bg-slate-50/90">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200">
               <Tag className="w-5 h-5" />
@@ -136,7 +165,7 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
                 {targetAssets.length > 1 ? `Print QR Asset Tags (${targetAssets.length} Assets)` : 'Asset QR Identification Label & Tag'}
               </h2>
               <p className="text-xs text-slate-500">
-                Ready for thermal printers (Zebra, Brother, Dymo) or standard laser/inkjet paper
+                Optimized for thermal printers (Zebra, Brother, Dymo) and standard laser/inkjet sheets
               </p>
             </div>
           </div>
@@ -148,10 +177,10 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
           </button>
         </div>
 
-        {/* Layout & Quick Action Switcher */}
+        {/* Layout & Format Selector Bar */}
         <div className="px-5 sm:px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-600 text-[11px] uppercase tracking-wider">Layout:</span>
+            <span className="font-semibold text-slate-600 text-[11px] uppercase tracking-wider">Format:</span>
             <div className="flex bg-white rounded-lg border border-slate-300 p-0.5 shadow-xs">
               <button
                 onClick={() => setLayout('standard')}
@@ -163,7 +192,7 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
                 onClick={() => setLayout('zebra')}
                 className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${layout === 'zebra' ? 'bg-indigo-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                Zebra / Dymo 4x2"
+                Zebra 4x2" Thermal
               </button>
               <button
                 onClick={() => setLayout('compact')}
@@ -178,7 +207,7 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
             <button
               onClick={handleDownloadHtml}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-[11px] font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors shadow-xs"
-              title="Download standalone HTML sheet that auto-prompts print dialog"
+              title="Download self-contained HTML print sheet to open in any browser"
             >
               <FileCode className="w-3.5 h-3.5 text-indigo-600" />
               <span>Download HTML Sheet</span>
@@ -200,7 +229,7 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
             {targetAssets.map((item) => (
               <div
                 key={item.id}
-                className="print-label-card bg-white text-slate-900 p-4 rounded-xl border-2 border-slate-900 shadow-sm flex flex-col justify-between relative overflow-hidden group"
+                className="print-label-card bg-white text-slate-900 p-4 rounded-xl border-2 border-slate-900 shadow-sm flex flex-col justify-between relative overflow-hidden"
                 style={{ minHeight: layout === 'compact' ? '140px' : '200px' }}
               >
                 {/* Brand Header */}
@@ -229,7 +258,7 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
                       />
                     ) : (
                       <div className="w-20 h-20 flex items-center justify-center bg-slate-100 text-[10px] text-slate-400">
-                        Generating...
+                        {isGenerating ? 'Generating...' : 'Loading'}
                       </div>
                     )}
                   </div>
@@ -256,23 +285,23 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
                   <span className="font-bold text-slate-900">DO NOT REMOVE TAG</span>
                 </div>
 
-                {/* Quick Individual Actions overlay on hover for single items */}
+                {/* Quick Individual Actions */}
                 <div className="mt-2 pt-2 border-t border-dashed border-slate-200 flex items-center justify-between gap-1 text-[11px]">
                   <button
                     onClick={() => handleDownloadPng(item)}
-                    className="flex items-center gap-1 text-indigo-700 hover:text-indigo-900 font-semibold py-0.5 px-1.5 rounded hover:bg-indigo-50 transition-colors"
+                    className="flex items-center gap-1 text-indigo-700 hover:text-indigo-900 font-semibold py-1 px-2 rounded hover:bg-indigo-50 transition-colors"
                     title="Save this label as a 300-DPI PNG file"
                   >
                     <ImageIcon className="w-3.5 h-3.5" />
-                    <span>Save PNG Image</span>
+                    <span>Save PNG Sticker</span>
                   </button>
                   <button
                     onClick={() => handleCopyImage(item)}
-                    className="flex items-center gap-1 text-slate-600 hover:text-slate-900 font-semibold py-0.5 px-1.5 rounded hover:bg-slate-100 transition-colors"
+                    className="flex items-center gap-1 text-slate-600 hover:text-slate-900 font-semibold py-1 px-2 rounded hover:bg-slate-100 transition-colors"
                     title="Copy PNG tag image to clipboard"
                   >
                     {copiedImage ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedImage ? 'Copied' : 'Copy Image'}</span>
+                    <span>{copiedImage ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
               </div>
@@ -281,30 +310,28 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
 
           {targetAssets.length === 1 && (
             <div className="p-3 rounded-lg bg-white border border-slate-200 flex items-center justify-between text-xs text-slate-700 shadow-xs">
-              <span className="font-mono text-indigo-700 font-semibold">{targetAssets[0].assetCode}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleCopyCode(targetAssets[0].assetCode)}
-                  className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 px-2 py-1 rounded bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
-                >
-                  {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedCode ? 'Copied' : 'Copy Asset Code'}</span>
-                </button>
-              </div>
+              <span className="font-mono text-indigo-700 font-semibold">Asset Tag: {targetAssets[0].assetCode}</span>
+              <button
+                onClick={() => handleCopyCode(targetAssets[0].assetCode)}
+                className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 px-2 py-1 rounded bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+              >
+                {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
+              </button>
             </div>
           )}
         </div>
 
         {/* Actions Footer */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-t border-slate-200 bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 bg-white">
           <div className="text-[11px] text-slate-500">
-            Thermal Label: <span className="font-semibold text-slate-700">4" × 2" (Zebra/Dymo)</span> or standard paper.
+            Supports <span className="font-semibold text-slate-700">Zebra / Dymo 4"×2" thermal stickers</span> and standard paper.
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors"
+              className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors"
             >
               Close
             </button>
@@ -312,19 +339,19 @@ export const QRPrintModal: React.FC<QRPrintModalProps> = ({ asset, onClose, batc
             {targetAssets.length === 1 && (
               <button
                 onClick={() => handleDownloadPng(targetAssets[0])}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-semibold text-slate-800 transition-colors"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold text-indigo-800 transition-colors"
               >
                 <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Save PNG</span>
+                <span>Save PNG Sticker</span>
               </button>
             )}
 
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-all active:scale-95"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Label Now</span>
+              <span>Print via Browser</span>
             </button>
           </div>
         </div>

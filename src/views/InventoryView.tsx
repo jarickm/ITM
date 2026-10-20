@@ -9,7 +9,10 @@ import {
   Filter, 
   AlertTriangle, 
   CheckSquare, 
-  Square
+  Square,
+  RotateCcw,
+  X,
+  CheckCircle2
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 import { Asset, AssetCategory, AssetStatus } from '../types/itm';
@@ -30,7 +33,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     deleteAsset, 
     setSelectedAssetForQR, 
     quickSearchQuery, 
-    currentUser 
+    currentUser,
+    clearAllData,
+    clearAssetsOnly,
+    seedInitialDataToFirebase
   } = useITM();
 
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
@@ -38,6 +44,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [localSearch, setLocalSearch] = useState<string>('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearStatus, setClearStatus] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
 
   const categories = useMemo(() => ['All', ...new Set(assets.map(a => a.category))], [assets]);
   const departments = useMemo(() => ['All', ...new Set(assets.map(a => a.department))], [assets]);
@@ -125,6 +134,33 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     document.body.removeChild(link);
   };
 
+  const handleConfirmClearAll = async () => {
+    setIsClearing(true);
+    await clearAllData();
+    setIsClearing(false);
+    setShowClearModal(false);
+    setClearStatus('All system records cleared! You can now start adding your company items.');
+    setTimeout(() => setClearStatus(null), 5000);
+  };
+
+  const handleConfirmClearAssets = async () => {
+    setIsClearing(true);
+    await clearAssetsOnly();
+    setIsClearing(false);
+    setShowClearModal(false);
+    setClearStatus('Inventory asset catalog cleared! Ready for new records.');
+    setTimeout(() => setClearStatus(null), 5000);
+  };
+
+  const handleReloadDemoData = async () => {
+    setIsClearing(true);
+    await seedInitialDataToFirebase();
+    setIsClearing(false);
+    setShowClearModal(false);
+    setClearStatus('Sample demo dataset restored successfully!');
+    setTimeout(() => setClearStatus(null), 5000);
+  };
+
   const canEdit = currentUser.role !== 'Auditor';
 
   return (
@@ -161,6 +197,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
           {canEdit && (
             <button
+              onClick={() => setShowClearModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-xs font-semibold text-rose-700 transition-colors shadow-xs"
+              title="Clear sample data to add your own company items"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Data</span>
+            </button>
+          )}
+
+          {canEdit && (
+            <button
               onClick={onOpenNewAsset}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white shadow-xs transition-all active:scale-95"
             >
@@ -170,6 +217,19 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Clear Status Notice Banner */}
+      {clearStatus && (
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center justify-between animate-fadeIn shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{clearStatus}</span>
+          </div>
+          <button onClick={() => setClearStatus(null)} className="text-emerald-700 hover:text-emerald-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
@@ -382,6 +442,105 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Clear Data Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-rose-50/60">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-rose-100 text-rose-700 border border-rose-200">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Clear Data & Start Fresh</h3>
+                  <p className="text-xs text-slate-500">Wipe demo records to enter your real company inventory</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/80 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs text-slate-600 bg-white">
+              <p className="leading-relaxed">
+                Choose how you want to clear the data. Once cleared, you can start inputting your company's actual equipment, employee names, and serial numbers:
+              </p>
+
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/30 flex items-start justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                      <span>Clear All System Records (Wipe Everything)</span>
+                      <span className="text-[10px] font-semibold uppercase px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
+                        Recommended
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Wipes all hardware assets, onboarding, offboarding, PR/IER requests, borrowing, PM, and liability slips.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleConfirmClearAll}
+                    disabled={isClearing}
+                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shrink-0 shadow-xs transition-colors"
+                  >
+                    {isClearing ? 'Clearing...' : 'Clear All'}
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-start justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-slate-900 text-xs">
+                      Clear Asset Inventory Only
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Clears only the device catalog items, leaving departments and organizational settings intact.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleConfirmClearAssets}
+                    disabled={isClearing}
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-semibold text-xs shrink-0 shadow-xs transition-colors"
+                  >
+                    {isClearing ? 'Clearing...' : 'Clear Assets'}
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/40 flex items-start justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-indigo-900 text-xs">
+                      Need Demo Data Back Later?
+                    </div>
+                    <p className="text-[11px] text-indigo-700">
+                      You can reload the complete sample dataset anytime for KPI demos and training.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleReloadDemoData}
+                    disabled={isClearing}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shrink-0 shadow-xs transition-colors"
+                  >
+                    {isClearing ? 'Restoring...' : 'Restore Demo'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end px-6 py-3.5 border-t border-slate-200 bg-slate-50">
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors shadow-xs"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

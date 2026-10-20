@@ -9,7 +9,9 @@ import {
   Save, 
   CheckCircle2, 
   Layers, 
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 
@@ -20,6 +22,8 @@ export const SettingsView: React.FC = () => {
     createBackupSnapshot, 
     restoreBackupSnapshot,
     seedInitialDataToFirebase, 
+    clearAllData,
+    clearAssetsOnly,
     isFirebaseConnected 
   } = useITM();
 
@@ -31,6 +35,8 @@ export const SettingsView: React.FC = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearNotice, setClearNotice] = useState<string | null>(null);
 
   const handleThresholdChange = (category: string, value: number) => {
     setThresholds(prev => ({
@@ -73,7 +79,45 @@ export const SettingsView: React.FC = () => {
     setSeeding(true);
     await seedInitialDataToFirebase();
     setSeeding(false);
-    alert('Enterprise sample dataset synchronized to Firebase Firestore!');
+    setClearNotice('Enterprise sample dataset synchronized to Firebase Firestore!');
+    setTimeout(() => setClearNotice(null), 5000);
+  };
+
+  const handleClearAll = async () => {
+    const ok = window.confirm(
+      '⚠️ ARE YOU SURE YOU WANT TO CLEAR ALL SYSTEM DATA?\n\n' +
+      'This will permanently delete all:\n' +
+      '• Assets & Hardware Inventory\n' +
+      '• Employee Onboardings & Offboardings\n' +
+      '• PR & IER Procurement Requests\n' +
+      '• Equipment Borrowing Loans\n' +
+      '• Preventive Maintenance Logs\n' +
+      '• Liability & Accountability Slips\n' +
+      '• Activity Audit Logs\n\n' +
+      'Both Firebase Firestore and local memory will be wiped so you can add fresh records from scratch.\n\n' +
+      'Click OK to proceed.'
+    );
+    if (!ok) return;
+
+    setClearing(true);
+    await clearAllData();
+    setClearing(false);
+    setClearNotice('All system data cleared successfully! You can now start adding your real records.');
+    setTimeout(() => setClearNotice(null), 6000);
+  };
+
+  const handleClearAssets = async () => {
+    const ok = window.confirm(
+      'Clear all inventory asset items?\n\n' +
+      'This will wipe only the asset catalog so you can register your company\'s devices, leaving your settings intact.'
+    );
+    if (!ok) return;
+
+    setClearing(true);
+    await clearAssetsOnly();
+    setClearing(false);
+    setClearNotice('All asset catalog items cleared. The inventory is now ready for new records.');
+    setTimeout(() => setClearNotice(null), 6000);
   };
 
   return (
@@ -257,8 +301,54 @@ export const SettingsView: React.FC = () => {
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all text-xs shrink-0 shadow-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${seeding ? 'animate-spin' : ''}`} />
-              <span>{seeding ? 'Syncing...' : 'Sync Data to Cloud'}</span>
+              <span>{seeding ? 'Syncing...' : 'Reload Sample Dataset'}</span>
             </button>
+          </div>
+
+          {/* Danger Zone: Clear Data */}
+          <div className="p-4 rounded-xl bg-rose-50/40 border border-rose-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                <span className="font-bold text-slate-900 text-xs">Database Reset & Data Clearing</span>
+              </div>
+              <span className="text-[10px] uppercase font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-200">
+                Data Management
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Wipe sample records so you can begin entering your company's actual equipment, employee onboardings, and procurement requests from scratch.
+            </p>
+
+            {clearNotice && (
+              <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{clearNotice}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleClearAssets}
+                disabled={clearing}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-semibold text-xs shadow-xs transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear Asset Inventory Only</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearAll}
+                disabled={clearing}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{clearing ? 'Clearing...' : 'Clear All System Records (Wipe Everything)'}</span>
+              </button>
+            </div>
           </div>
         </div>
 

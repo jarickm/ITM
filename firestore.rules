@@ -52,9 +52,7 @@ service cloud.firestore {
     }
 
     match /activity_logs/{logId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow read, write: if isSignedIn();
     }
 
     match /settings/{settingId} {

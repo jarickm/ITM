@@ -27,19 +27,8 @@
   background: #94a3b8;
 }
 
-/* Base print rules */
+/* Base print media rules */
 @media print {
-  /* Hide the web application chrome, sidebar, navigation, and modal backdrops */
-  body.is-printing-qr-labels #root,
-  body.is-printing-qr-labels .fixed:not(#printable-qr-layer),
-  body.is-printing-qr-labels header,
-  body.is-printing-qr-labels aside,
-  body.is-printing-qr-labels nav,
-  body.is-printing-qr-labels button,
-  .no-print {
-    display: none !important;
-  }
-
   body {
     background: #ffffff !important;
     color: #000000 !important;
@@ -47,22 +36,7 @@
     padding: 0 !important;
   }
 
-  /* Dedicated QR printable layer */
-  #printable-qr-layer {
-    display: block !important;
-    visibility: visible !important;
-    position: static !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  #printable-qr-layer * {
-    visibility: visible !important;
-  }
-
+  /* When printing from browser, avoid page break inside cards */
   .print-label-card,
   .print-label-item {
     page-break-inside: avoid !important;

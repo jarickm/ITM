@@ -37,38 +37,47 @@ export const QRStudioView: React.FC = () => {
 
   const printableAssets = displayedAssets.filter(a => selectedIds.includes(a.id));
 
-  // Generate QR code data URLs
+  // Generate QR code data URLs in parallel
   useEffect(() => {
+    let isMounted = true;
     const generateAll = async () => {
       const map: Record<string, string> = {};
-      for (const item of printableAssets) {
-        try {
-          const payload = JSON.stringify({
-            code: item.assetCode,
-            name: item.employeeOrDeviceName,
-            category: item.category,
-            dept: item.department,
-            sn: item.specificationOrSN,
-          });
-          const url = await QRCode.toDataURL(payload, {
-            width: 280,
-            margin: 1,
-            color: {
-              dark: '#000000',
-              light: '#ffffff',
-            },
-          });
-          map[item.id] = url;
-        } catch (e) {
-          console.error(e);
-        }
+      await Promise.all(
+        printableAssets.map(async (item) => {
+          try {
+            const payload = JSON.stringify({
+              code: item.assetCode,
+              name: item.employeeOrDeviceName,
+              category: item.category,
+              dept: item.department,
+              sn: item.specificationOrSN,
+            });
+            const url = await QRCode.toDataURL(payload, {
+              width: 280,
+              margin: 1,
+              color: {
+                dark: '#000000',
+                light: '#ffffff',
+              },
+            });
+            map[item.id] = url;
+          } catch (e) {
+            console.error('QR generate error for', item.assetCode, e);
+          }
+        })
+      );
+      if (isMounted) {
+        setQrMap(map);
       }
-      setQrMap(map);
     };
 
     if (printableAssets.length > 0) {
       generateAll();
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [printableAssets.length, selectedCategory, selectedIds]);
 
   const handleSelectAll = () => {

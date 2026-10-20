@@ -28,7 +28,7 @@ export function buildQRLabelsHtml(
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       margin: 0;
-      padding: ${isZebra ? '2px' : '12px'};
+      padding: ${isZebra ? '4px' : '12px'};
       background: #ffffff;
       color: #0f172a;
     }
@@ -158,8 +158,12 @@ export function buildQRLabelsHtml(
   <script>
     window.addEventListener('load', function() {
       setTimeout(function() {
-        window.focus();
-        window.print();
+        try {
+          window.focus();
+          window.print();
+        } catch (e) {
+          console.warn('Auto print error:', e);
+        }
       }, 350);
     });
   </script>` : ''}
@@ -177,57 +181,60 @@ function escapeHtml(str: string): string {
 }
 
 /**
- * Universal print trigger that reliably prints QR labels in any browser context,
- * including iframe previews, desktop Chrome/Edge/Safari, and mobile.
+ * Universal print trigger that reliably prints QR labels without locking
+ * or freezing the host application event loop.
  */
 export function executePrint(htmlContent: string) {
-  // Clean up any existing print layers
-  const existing = document.getElementById('printable-qr-layer');
-  if (existing) {
-    existing.remove();
-  }
-
-  // Create dedicated top-level container for printing
-  const printLayer = document.createElement('div');
-  printLayer.id = 'printable-qr-layer';
-
-  // Extract body contents & styles from the generated HTML
-  const parser = new DOMParser();
-  const parsedDoc = parser.parseFromString(htmlContent, 'text/html');
-  const styleEl = parsedDoc.querySelector('style');
-  const bodyContent = parsedDoc.body.innerHTML;
-
-  if (styleEl) {
-    const styleClone = document.createElement('style');
-    styleClone.id = 'printable-qr-style';
-    styleClone.innerHTML = styleEl.innerHTML;
-    printLayer.appendChild(styleClone);
-  }
-
-  const contentWrapper = document.createElement('div');
-  contentWrapper.innerHTML = bodyContent;
-  printLayer.appendChild(contentWrapper);
-
-  document.body.appendChild(printLayer);
-  document.body.classList.add('is-printing-qr-labels');
-
-  // Trigger print with slight delay so browser renders images
-  setTimeout(() => {
-    try {
-      window.focus();
-      window.print();
-    } catch (e) {
-      console.warn('Native window.print() failed:', e);
-    } finally {
-      // Keep layer active briefly for print rasterizer, then clean up
-      setTimeout(() => {
-        document.body.classList.remove('is-printing-qr-labels');
-        if (document.body.contains(printLayer)) {
-          printLayer.remove();
-        }
-      }, 2000);
+  // Try clean hidden iframe printing
+  try {
+    const existing = document.getElementById('itm-silent-print-frame');
+    if (existing) {
+      existing.remove();
     }
-  }, 250);
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'itm-silent-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.warn('Iframe print intercepted:', e);
+          // Auto fallback to printable file download
+          downloadPrintableHtml(htmlContent, `ITM_QR_Labels_${Date.now()}.html`);
+        } finally {
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              iframe.remove();
+            }
+          }, 3500);
+        }
+      }, 350);
+      return;
+    }
+  } catch (err) {
+    console.warn('Silent print initialization failed, downloading printable HTML instead:', err);
+  }
+
+  // Fallback: download standalone printable HTML
+  downloadPrintableHtml(htmlContent, `ITM_QR_Labels_${Date.now()}.html`);
 }
 
 /**
@@ -243,7 +250,7 @@ export function downloadPrintableHtml(htmlContent: string, filename: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -273,7 +280,7 @@ export function renderAssetTagToCanvas(
       return;
     }
 
-    // White background
+    // Crisp white background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 

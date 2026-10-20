@@ -5,7 +5,8 @@ import {
   doc, 
   setDoc, 
   deleteDoc, 
-  updateDoc 
+  updateDoc,
+  getDocs 
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType, initAuthListener, testConnection } from '../firebase/config';
 import { 
@@ -96,6 +97,8 @@ interface ITMContextType {
   // Settings & DB Management
   updateSettings: (newSettings: Partial<SystemSettings>) => Promise<void>;
   seedInitialDataToFirebase: () => Promise<void>;
+  clearAllData: () => Promise<void>;
+  clearAssetsOnly: () => Promise<void>;
   createBackupSnapshot: () => void;
   restoreBackupSnapshot: (jsonData: string) => Promise<void>;
 
@@ -127,44 +130,54 @@ const ITMContext = createContext<ITMContextType | undefined>(undefined);
 const LOCAL_STORAGE_PREFIX = 'itm_pro_';
 
 export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isCleared = typeof window !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
+
   // Local fallback states loaded from localStorage or initial seed
   const [assets, setAssets] = useState<Asset[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'assets');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_ASSETS;
   });
 
   const [onboardings, setOnboardings] = useState<OnboardingRecord[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'onboardings');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_ONBOARDINGS;
   });
 
   const [offboardings, setOffboardings] = useState<OffboardingRecord[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'offboardings');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_OFFBOARDINGS;
   });
 
   const [requests, setRequests] = useState<RequestRecord[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'requests');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_REQUESTS;
   });
 
   const [borrowings, setBorrowings] = useState<BorrowingRecord[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'borrowings');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_BORROWINGS;
   });
 
   const [preventiveMaintenance, setPreventiveMaintenance] = useState<PreventiveMaintenanceRecord[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'pm');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_PREVENTIVE_MAINTENANCE;
   });
 
   const [liabilities, setLiabilities] = useState<LiabilityRecord[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'liabilities');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_LIABILITIES;
   });
 
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => {
     const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'activity_logs');
+    if (isCleared) return cached ? JSON.parse(cached) : [];
     return cached ? JSON.parse(cached) : SEED_ACTIVITY_LOGS;
   });
 
@@ -310,9 +323,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Attach Firestore onSnapshot listeners
       try {
         const assetsUnsub = onSnapshot(collection(db, 'assets'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Asset));
             setAssets(list);
+          } else if (clearedFlag) {
+            setAssets([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'assets');
@@ -320,9 +336,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(assetsUnsub);
 
         const onbUnsub = onSnapshot(collection(db, 'onboardings'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OnboardingRecord));
             setOnboardings(list);
+          } else if (clearedFlag) {
+            setOnboardings([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'onboardings');
@@ -330,9 +349,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(onbUnsub);
 
         const offUnsub = onSnapshot(collection(db, 'offboardings'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OffboardingRecord));
             setOffboardings(list);
+          } else if (clearedFlag) {
+            setOffboardings([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'offboardings');
@@ -340,9 +362,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(offUnsub);
 
         const reqUnsub = onSnapshot(collection(db, 'requests'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RequestRecord));
             setRequests(list);
+          } else if (clearedFlag) {
+            setRequests([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'requests');
@@ -350,9 +375,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(reqUnsub);
 
         const brwUnsub = onSnapshot(collection(db, 'borrowings'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BorrowingRecord));
             setBorrowings(list);
+          } else if (clearedFlag) {
+            setBorrowings([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'borrowings');
@@ -360,9 +388,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(brwUnsub);
 
         const pmUnsub = onSnapshot(collection(db, 'preventive_maintenance'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PreventiveMaintenanceRecord));
             setPreventiveMaintenance(list);
+          } else if (clearedFlag) {
+            setPreventiveMaintenance([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'preventive_maintenance');
@@ -370,9 +401,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(pmUnsub);
 
         const liaUnsub = onSnapshot(collection(db, 'liabilities'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LiabilityRecord));
             setLiabilities(list);
+          } else if (clearedFlag) {
+            setLiabilities([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'liabilities');
@@ -380,11 +414,13 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(liaUnsub);
 
         const logUnsub = onSnapshot(collection(db, 'activity_logs'), (snapshot) => {
+          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
           if (!snapshot.empty) {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
-            // Sort by latest timestamp
             list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
             setActivityLogs(list);
+          } else if (clearedFlag) {
+            setActivityLogs([]);
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'activity_logs');
@@ -796,11 +832,74 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       for (const log of SEED_ACTIVITY_LOGS) {
         await setDoc(doc(db, 'activity_logs', log.id), log);
       }
-      await setDoc(doc(db, 'settings', 'global'), INITIAL_SETTINGS);
+      localStorage.removeItem(LOCAL_STORAGE_PREFIX + 'cleared');
       await logActivity('DATABASE_SEED', 'System', 'all', 'Seeded initial enterprise dataset to Firebase Firestore');
     } catch (err) {
       console.error('Seeding error:', err);
     }
+  };
+
+  // Clear All System Data (Wipe database & start fresh)
+  const clearAllData = async () => {
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'cleared', 'true');
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'assets', JSON.stringify([]));
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'onboardings', JSON.stringify([]));
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'offboardings', JSON.stringify([]));
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'requests', JSON.stringify([]));
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'borrowings', JSON.stringify([]));
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'pm', JSON.stringify([]));
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'liabilities', JSON.stringify([]));
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'activity_logs', JSON.stringify([]));
+
+    setAssets([]);
+    setOnboardings([]);
+    setOffboardings([]);
+    setRequests([]);
+    setBorrowings([]);
+    setPreventiveMaintenance([]);
+    setLiabilities([]);
+    setActivityLogs([]);
+
+    if (auth.currentUser) {
+      const collectionsToWipe = [
+        'assets',
+        'onboardings',
+        'offboardings',
+        'requests',
+        'borrowings',
+        'preventive_maintenance',
+        'liabilities',
+        'activity_logs',
+      ];
+
+      for (const col of collectionsToWipe) {
+        try {
+          const snap = await getDocs(collection(db, col));
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col, d.id))));
+        } catch (err) {
+          console.warn(`Error clearing collection ${col}:`, err);
+        }
+      }
+    }
+
+    await logActivity('SYSTEM_CLEARED', 'System', 'all', 'All system data and inventory records cleared for a fresh start');
+  };
+
+  // Clear Inventory Assets Only
+  const clearAssetsOnly = async () => {
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'assets', JSON.stringify([]));
+    setAssets([]);
+
+    if (auth.currentUser) {
+      try {
+        const snap = await getDocs(collection(db, 'assets'));
+        await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'assets', d.id))));
+      } catch (err) {
+        console.warn('Error clearing assets:', err);
+      }
+    }
+
+    await logActivity('ASSETS_CLEARED', 'Asset', 'all', 'All inventory asset records cleared');
   };
 
   // Backup snapshots
@@ -900,6 +999,8 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logActivity,
         updateSettings,
         seedInitialDataToFirebase,
+        clearAllData,
+        clearAssetsOnly,
         createBackupSnapshot,
         restoreBackupSnapshot,
         currentUser,
