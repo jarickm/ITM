@@ -1,0 +1,170 @@
+{
+  "entities": {
+    "Asset": {
+      "title": "Asset",
+      "description": "IT hardware, devices, monitors, and equipment inventory records",
+      "type": "object",
+      "properties": {
+        "employeeOrDeviceName": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 50 },
+        "specificationOrSN": { "type": "string", "maxLength": 200 },
+        "assetCode": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["In Use", "Available", "Under Maintenance", "Defective", "Retired", "Reserved"] },
+        "department": { "type": "string", "maxLength": 80 },
+        "purchaseDate": { "type": "string", "maxLength": 20 },
+        "warrantyExpiry": { "type": "string", "maxLength": 20 },
+        "location": { "type": "string", "maxLength": 100 },
+        "isDefective": { "type": "boolean" },
+        "defectiveDetails": { "type": "string", "maxLength": 500 },
+        "notes": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["employeeOrDeviceName", "category", "specificationOrSN", "assetCode", "status", "department", "purchaseDate"]
+    },
+    "Onboarding": {
+      "title": "Onboarding",
+      "description": "Employee onboarding hardware allocation records",
+      "type": "object",
+      "properties": {
+        "employeeName": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "maxLength": 80 },
+        "position": { "type": "string", "maxLength": 80 },
+        "startDate": { "type": "string", "maxLength": 20 },
+        "company": { "type": "string", "maxLength": 100 },
+        "controlNumber": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "maxLength": 50 },
+        "dateOfOnboarding": { "type": "string", "maxLength": 20 }
+      },
+      "required": ["employeeName", "department", "position", "startDate", "company", "controlNumber", "status", "dateOfOnboarding"]
+    },
+    "Offboarding": {
+      "title": "Offboarding",
+      "description": "Employee separation and IT asset clearance records",
+      "type": "object",
+      "properties": {
+        "employeeName": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "maxLength": 80 },
+        "position": { "type": "string", "maxLength": 80 },
+        "separationDate": { "type": "string", "maxLength": 20 },
+        "company": { "type": "string", "maxLength": 100 },
+        "controlNumber": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["employeeName", "department", "position", "separationDate", "company", "controlNumber", "status"]
+    },
+    "Request": {
+      "title": "Request",
+      "description": "Purchase Requests (PR) and Incident / Equipment Requests (IER)",
+      "type": "object",
+      "properties": {
+        "dateReported": { "type": "string", "maxLength": 20 },
+        "requestType": { "type": "string", "enum": ["PR", "IER"] },
+        "referenceNo": { "type": "string", "maxLength": 50 },
+        "employeeOrRequesterName": { "type": "string", "maxLength": 100 },
+        "departmentOrBranches": { "type": "string", "maxLength": 100 },
+        "actionsTakenOrRemarks": { "type": "string", "maxLength": 1000 },
+        "dateCreated": { "type": "string", "maxLength": 20 },
+        "dateResolved": { "type": "string", "maxLength": 20 },
+        "days": { "type": "number" },
+        "majorOrMinor": { "type": "string", "enum": ["Major", "Minor", "Critical"] },
+        "status": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["dateReported", "requestType", "referenceNo", "employeeOrRequesterName", "departmentOrBranches", "actionsTakenOrRemarks", "dateCreated", "majorOrMinor"]
+    },
+    "Borrowing": {
+      "title": "Borrowing",
+      "description": "IT Equipment Borrowing and Return tracker",
+      "type": "object",
+      "properties": {
+        "borrowerName": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "maxLength": 80 },
+        "itemCategory": { "type": "string", "maxLength": 50 },
+        "borrowDate": { "type": "string", "maxLength": 20 },
+        "returnDate": { "type": "string", "maxLength": 20 },
+        "status": { "type": "string", "maxLength": 50 },
+        "remarks": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["borrowerName", "department", "itemCategory", "borrowDate", "returnDate", "status"]
+    },
+    "PreventiveMaintenance": {
+      "title": "PreventiveMaintenance",
+      "description": "Routine IT asset preventive maintenance inspection logs",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string", "maxLength": 200 },
+        "date": { "type": "string", "maxLength": 20 },
+        "datePurchase": { "type": "string", "maxLength": 20 },
+        "assetCode": { "type": "string", "maxLength": 50 },
+        "activityWorkDone": { "type": "string", "maxLength": 1000 },
+        "performedBy": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "maxLength": 50 },
+        "recommendation": { "type": "string", "maxLength": 500 },
+        "department": { "type": "string", "maxLength": 80 }
+      },
+      "required": ["description", "date", "datePurchase", "assetCode", "activityWorkDone", "performedBy", "status", "recommendation", "department"]
+    },
+    "Liability": {
+      "title": "Liability",
+      "description": "Equipment liability and accountability custody assignments",
+      "type": "object",
+      "properties": {
+        "qty": { "type": "number" },
+        "uom": { "type": "string", "maxLength": 20 },
+        "itemDescription": { "type": "string", "maxLength": 200 },
+        "dateIssued": { "type": "string", "maxLength": 20 },
+        "employeeName": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "maxLength": 80 },
+        "assetCode": { "type": "string", "maxLength": 50 },
+        "company": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["qty", "uom", "itemDescription", "dateIssued", "employeeName", "department", "assetCode", "company"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "System audit trail for asset transfers, changes, and user operations",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "maxLength": 30 },
+        "actor": { "type": "string", "maxLength": 100 },
+        "action": { "type": "string", "maxLength": 100 },
+        "targetEntity": { "type": "string", "maxLength": 50 },
+        "targetId": { "type": "string", "maxLength": 80 },
+        "details": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["timestamp", "actor", "action", "targetEntity", "details"]
+    }
+  },
+  "firestore": {
+    "/assets/{assetId}": {
+      "schema": "#/entities/Asset",
+      "description": "IT Asset Inventory entries"
+    },
+    "/onboardings/{onboardingId}": {
+      "schema": "#/entities/Onboarding",
+      "description": "Employee onboarding hardware allocations"
+    },
+    "/offboardings/{offboardingId}": {
+      "schema": "#/entities/Offboarding",
+      "description": "Employee offboarding clearance"
+    },
+    "/requests/{requestId}": {
+      "schema": "#/entities/Request",
+      "description": "PR and IER requests"
+    },
+    "/borrowings/{borrowingId}": {
+      "schema": "#/entities/Borrowing",
+      "description": "Equipment borrowing records"
+    },
+    "/preventive_maintenance/{pmId}": {
+      "schema": "#/entities/PreventiveMaintenance",
+      "description": "Maintenance records"
+    },
+    "/liabilities/{liabilityId}": {
+      "schema": "#/entities/Liability",
+      "description": "Liability assignments"
+    },
+    "/activity_logs/{logId}": {
+      "schema": "#/entities/ActivityLog",
+      "description": "Audit trails"
+    }
+  }
+}

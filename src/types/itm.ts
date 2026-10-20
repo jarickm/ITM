@@ -1,0 +1,189 @@
+export type AssetStatus = 
+  | 'In Use' 
+  | 'Available' 
+  | 'Under Maintenance' 
+  | 'Defective' 
+  | 'Retired' 
+  | 'Reserved';
+
+export type AssetCategory = 
+  | 'Laptop' 
+  | 'Desktop PC' 
+  | 'Workstation' 
+  | 'Monitor' 
+  | 'Server' 
+  | 'Network & Switch' 
+  | 'Printer & Scanner' 
+  | 'Mobile Device / Tablet' 
+  | 'Peripherals / Accessories' 
+  | 'Software / License';
+
+export interface Asset {
+  id: string;
+  employeeOrDeviceName: string; // Employee / Device Name
+  category: AssetCategory;      // Category
+  specificationOrSN: string;    // Specification/SN
+  assetCode: string;            // Asset Code (e.g. IT-NB-2024-001)
+  status: AssetStatus;          // Status
+  department: string;           // Department
+  purchaseDate: string;         // Purchase Date (YYYY-MM-DD)
+  cost?: number;
+  warrantyExpiry?: string;
+  location?: string;
+  isDefective?: boolean;
+  defectiveDetails?: string;
+  repairVendor?: string;
+  rmaNumber?: string;
+  qrCodeData?: string;
+  imageUrl?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type OnboardingStatus = 'Pending' | 'Equipment Assigned' | 'Completed' | 'Delayed';
+
+export interface OnboardingRecord {
+  id: string;
+  employeeName: string;       // Employee Name
+  department: string;         // Department
+  position: string;           // Position
+  startDate: string;          // Start Date
+  company: string;            // Company
+  controlNumber: string;      // Control Number
+  status: OnboardingStatus;   // Status
+  dateOfOnboarding: string;   // Date of onboarding
+  assignedAssets?: string[];  // Asset codes assigned
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type OffboardingStatus = 'Pending Surrender' | 'Partially Returned' | 'Cleared' | 'Disputed';
+
+export interface OffboardingRecord {
+  id: string;
+  employeeName: string;       // Employee Name
+  department: string;         // Department
+  position: string;           // Position
+  separationDate: string;     // Separation Date
+  company: string;            // Company
+  controlNumber: string;      // Control Number
+  status: OffboardingStatus;  // Status
+  clearedAssets?: string[];
+  pendingAssets?: string[];
+  itClearanceSignOff?: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RequestType = 'PR' | 'IER'; // Purchase Request or Incident/Equipment Request
+export type RequestPriority = 'Major' | 'Minor' | 'Critical';
+export type RequestStatus = 'Open' | 'In Progress' | 'Pending Approval' | 'Resolved' | 'Closed' | 'Cancelled';
+
+export interface RequestRecord {
+  id: string;
+  dateReported: string;               // DATE REPORTED
+  requestType: RequestType;           // Request Type
+  referenceNo: string;                // Reference No. (PR/IER)
+  employeeOrRequesterName: string;    // Employee/Requester Name
+  departmentOrBranches: string;       // Department/Branches
+  actionsTakenOrRemarks: string;      // Actions Taken/Remarks
+  dateCreated: string;                // DATE CREATED IER/PR
+  dateResolved?: string;              // DATE RESOLVED
+  days: number;                       // DAYS (Turnaround Time SLA)
+  majorOrMinor: RequestPriority;      // Major/Minor
+  status: RequestStatus;
+  estimatedAmount?: number;
+  assignedTechnician?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BorrowStatus = 'Active / Borrowed' | 'Returned' | 'Overdue' | 'Damaged on Return';
+
+export interface BorrowingRecord {
+  id: string;
+  borrowerName: string;       // Borrower Name
+  department: string;         // Department
+  itemCategory: string;       // Item Category
+  assetCode?: string;
+  borrowDate: string;         // Borrow Date
+  returnDate: string;         // Return Date
+  actualReturnDate?: string;
+  status: BorrowStatus;       // Status
+  remarks: string;            // Remarks
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PMStatus = 'Scheduled' | 'In Progress' | 'Completed' | 'Requires Replacement';
+
+export interface PreventiveMaintenanceRecord {
+  id: string;
+  description: string;        // Description
+  date: string;               // Date
+  datePurchase: string;       // Date Purchase
+  assetCode: string;          // Asset Code
+  activityWorkDone: string;   // Activity / Work Done
+  performedBy: string;        // Performed by
+  status: PMStatus;           // Status
+  recommendation: string;     // Recommendation
+  department: string;         // Department
+  nextMaintenanceDate?: string;
+  cost?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LiabilityStatus = 'Active Accountability' | 'Surrendered' | 'Transferred' | 'Lost/Damaged';
+
+export interface LiabilityRecord {
+  id: string;
+  qty: number;                // Qty
+  uom: string;                // UOM (Unit, Set, Pcs, Box, etc.)
+  itemDescription: string;    // Item Description
+  dateIssued: string;         // Date Issued
+  employeeName: string;       // Employee Name
+  department: string;         // Department
+  assetCode: string;          // Asset Code
+  company: string;            // Company
+  status: LiabilityStatus;
+  signedAcknowledged?: boolean;
+  remarks?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  targetEntity: string;
+  targetId: string;
+  details: string;
+}
+
+export type UserRole = 'Admin' | 'IT Manager' | 'IT Technician' | 'Auditor';
+
+export interface UserProfile {
+  name: string;
+  email: string;
+  role: UserRole;
+  department: string;
+  avatarUrl?: string;
+  adId?: string; // Active Directory Single Sign-On ID
+}
+
+export type LanguageCode = 'en' | 'es' | 'fil' | 'ja';
+
+export interface SystemSettings {
+  companyName: string;
+  lowStockThresholds: Record<string, number>;
+  emailAlertsEnabled: boolean;
+  alertEmail: string;
+  adDomain: string;
+  lastBackupDate?: string;
+}
