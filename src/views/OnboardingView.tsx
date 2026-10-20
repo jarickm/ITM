@@ -19,14 +19,26 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
   onOpenNewOnboarding, 
   onEditOnboarding 
 }) => {
-  const { onboardings, deleteOnboarding, quickSearchQuery, currentUser } = useITM();
+  const { onboardings, deleteOnboarding, quickSearchQuery, currentUser, dropdownOptions } = useITM();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+
+  const statuses = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.onboardingStatuses || []), ...onboardings.map(o => o.status)].filter(Boolean)))
+  ], [dropdownOptions.onboardingStatuses, onboardings]);
+
+  const departments = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.departments || []), ...onboardings.map(o => o.department)].filter(Boolean)))
+  ], [dropdownOptions.departments, onboardings]);
 
   const filtered = useMemo(() => {
     const q = (quickSearchQuery || search).trim().toLowerCase();
     return onboardings.filter(o => {
       if (statusFilter !== 'All' && o.status !== statusFilter) return false;
+      if (departmentFilter !== 'All' && o.department !== departmentFilter) return false;
       if (q) {
         const match = 
           o.employeeName.toLowerCase().includes(q) ||
@@ -38,7 +50,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
       }
       return true;
     });
-  }, [onboardings, statusFilter, quickSearchQuery, search]);
+  }, [onboardings, statusFilter, departmentFilter, quickSearchQuery, search]);
 
   const exportCSV = () => {
     const headers = [
@@ -129,15 +141,23 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
           </div>
 
           <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            {departments.map((d) => (
+              <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>
+            ))}
+          </select>
+
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
-            <option value="All">All Statuses</option>
-            <option value="Pending">Pending</option>
-            <option value="Equipment Assigned">Equipment Assigned</option>
-            <option value="Completed">Completed</option>
-            <option value="Delayed">Delayed</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
+            ))}
           </select>
         </div>
 

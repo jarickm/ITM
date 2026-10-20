@@ -20,7 +20,8 @@ import {
   ActivityLog,
   SystemSettings,
   UserProfile,
-  LanguageCode 
+  LanguageCode,
+  DropdownOptionsConfig 
 } from '../types/itm';
 import { 
   SEED_ASSETS, 
@@ -31,7 +32,8 @@ import {
   SEED_PREVENTIVE_MAINTENANCE, 
   SEED_LIABILITIES, 
   SEED_ACTIVITY_LOGS, 
-  INITIAL_SETTINGS 
+  INITIAL_SETTINGS,
+  DEFAULT_DROPDOWN_OPTIONS 
 } from '../data/seedData';
 import { TRANSLATIONS } from '../utils/i18n';
 
@@ -55,6 +57,14 @@ interface ITMContextType {
   liabilities: LiabilityRecord[];
   activityLogs: ActivityLog[];
   settings: SystemSettings;
+  dropdownOptions: DropdownOptionsConfig;
+
+  // Dropdown & Category Operations
+  updateDropdownOptions: (newOptions: Partial<DropdownOptionsConfig>) => Promise<void>;
+  addDropdownOption: (categoryKey: keyof DropdownOptionsConfig, value: string) => Promise<void>;
+  editDropdownOption: (categoryKey: keyof DropdownOptionsConfig, oldValue: string, newValue: string, updateExistingRecords?: boolean) => Promise<void>;
+  deleteDropdownOption: (categoryKey: keyof DropdownOptionsConfig, value: string) => Promise<void>;
+  resetDropdownCategoryToDefault: (categoryKey: keyof DropdownOptionsConfig) => Promise<void>;
 
   // CRUD Asset
   addAsset: (asset: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
@@ -186,6 +196,19 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return cached ? JSON.parse(cached) : INITIAL_SETTINGS;
   });
 
+  const [dropdownOptions, setDropdownOptionsState] = useState<DropdownOptionsConfig>(() => {
+    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'dropdown_options');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        return { ...DEFAULT_DROPDOWN_OPTIONS, ...parsed };
+      } catch {
+        return DEFAULT_DROPDOWN_OPTIONS;
+      }
+    }
+    return settings.dropdownOptions || DEFAULT_DROPDOWN_OPTIONS;
+  });
+
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     name: 'JM Montojo',
     email: 'jmmontojo2022@gmail.com',
@@ -238,6 +261,10 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_PREFIX + 'settings', JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'dropdown_options', JSON.stringify(dropdownOptions));
+  }, [dropdownOptions]);
 
   // Online / offline listeners
   useEffect(() => {
@@ -426,6 +453,29 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           handleFirestoreError(err, OperationType.GET, 'activity_logs');
         });
         unsubs.push(logUnsub);
+
+        const dropdownUnsub = onSnapshot(doc(db, 'settings', 'dropdowns'), (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data() as Partial<DropdownOptionsConfig>;
+            setDropdownOptionsState(prev => ({ ...prev, ...data }));
+          }
+        }, (err) => {
+          handleFirestoreError(err, OperationType.GET, 'settings/dropdowns');
+        });
+        unsubs.push(dropdownUnsub);
+
+        const settingsUnsub = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data() as Partial<SystemSettings>;
+            setSettingsState(prev => ({ ...prev, ...data }));
+            if (data.dropdownOptions) {
+              setDropdownOptionsState(prev => ({ ...prev, ...data.dropdownOptions }));
+            }
+          }
+        }, (err) => {
+          handleFirestoreError(err, OperationType.GET, 'settings/global');
+        });
+        unsubs.push(settingsUnsub);
       } catch (e) {
         console.warn('Real-time listener initialization notice:', e);
       }
@@ -804,6 +854,188 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // DROPDOWN & CATEGORY DATABASE MUTATIONS
+  const updateDropdownOptions = async (newOptions: Partial<DropdownOptionsConfig>) => {
+    const merged = { ...dropdownOptions, ...newOptions };
+    setDropdownOptionsState(merged);
+    await logActivity('DROPDOWNS_UPDATE', 'Settings', 'dropdowns', `Customized dropdown category options in database`);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'settings', 'dropdowns'), merged, { merge: true });
+        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: merged }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
+      }
+    }
+  };
+
+  const addDropdownOption = async (categoryKey: keyof DropdownOptionsConfig, value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const currentList = dropdownOptions[categoryKey] || [];
+    if (currentList.some(item => item.toLowerCase() === trimmed.toLowerCase())) {
+      return; // Already exists
+    }
+    const updatedList = [...currentList, trimmed];
+    const updatedConfig = { ...dropdownOptions, [categoryKey]: updatedList };
+    setDropdownOptionsState(updatedConfig);
+    await logActivity('DROPDOWN_OPTION_ADD', 'Category', categoryKey, `Added "${trimmed}" to ${categoryKey} database list`);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
+        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
+      }
+    }
+  };
+
+  const editDropdownOption = async (
+    categoryKey: keyof DropdownOptionsConfig, 
+    oldValue: string, 
+    newValue: string, 
+    updateExistingRecords = true
+  ) => {
+    const trimmedNew = newValue.trim();
+    if (!trimmedNew || trimmedNew === oldValue) return;
+    const currentList = dropdownOptions[categoryKey] || [];
+    const updatedList = currentList.map(item => item === oldValue ? trimmedNew : item);
+    const updatedConfig = { ...dropdownOptions, [categoryKey]: updatedList };
+    setDropdownOptionsState(updatedConfig);
+
+    await logActivity('DROPDOWN_OPTION_EDIT', 'Category', categoryKey, `Renamed "${oldValue}" to "${trimmedNew}" in ${categoryKey}`);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
+        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
+      }
+    }
+
+    // Cascade update existing records if requested
+    if (updateExistingRecords) {
+      if (categoryKey === 'departments') {
+        assets.forEach(a => {
+          if (a.department === oldValue) updateAsset(a.id, { department: trimmedNew });
+        });
+        onboardings.forEach(o => {
+          if (o.department === oldValue) updateOnboarding(o.id, { department: trimmedNew });
+        });
+        offboardings.forEach(o => {
+          if (o.department === oldValue) updateOffboarding(o.id, { department: trimmedNew });
+        });
+        requests.forEach(r => {
+          if (r.departmentOrBranches === oldValue) updateRequest(r.id, { departmentOrBranches: trimmedNew });
+        });
+        borrowings.forEach(b => {
+          if (b.department === oldValue) updateBorrowing(b.id, { department: trimmedNew });
+        });
+        preventiveMaintenance.forEach(p => {
+          if (p.department === oldValue) updatePreventiveMaintenance(p.id, { department: trimmedNew });
+        });
+        liabilities.forEach(l => {
+          if (l.department === oldValue) updateLiability(l.id, { department: trimmedNew });
+        });
+      } else if (categoryKey === 'assetCategories') {
+        assets.forEach(a => {
+          if (a.category === oldValue) updateAsset(a.id, { category: trimmedNew as any });
+        });
+        borrowings.forEach(b => {
+          if (b.itemCategory === oldValue) updateBorrowing(b.id, { itemCategory: trimmedNew });
+        });
+      } else if (categoryKey === 'assetStatuses') {
+        assets.forEach(a => {
+          if (a.status === oldValue) updateAsset(a.id, { status: trimmedNew as any });
+        });
+      } else if (categoryKey === 'requestTypes') {
+        requests.forEach(r => {
+          if (r.requestType === oldValue) updateRequest(r.id, { requestType: trimmedNew as any });
+        });
+      } else if (categoryKey === 'requestStatuses') {
+        requests.forEach(r => {
+          if (r.status === oldValue) updateRequest(r.id, { status: trimmedNew as any });
+        });
+      } else if (categoryKey === 'onboardingStatuses') {
+        onboardings.forEach(o => {
+          if (o.status === oldValue) updateOnboarding(o.id, { status: trimmedNew as any });
+        });
+      } else if (categoryKey === 'offboardingStatuses') {
+        offboardings.forEach(o => {
+          if (o.status === oldValue) updateOffboarding(o.id, { status: trimmedNew as any });
+        });
+      } else if (categoryKey === 'borrowStatuses') {
+        borrowings.forEach(b => {
+          if (b.status === oldValue) updateBorrowing(b.id, { status: trimmedNew as any });
+        });
+      } else if (categoryKey === 'pmStatuses') {
+        preventiveMaintenance.forEach(p => {
+          if (p.status === oldValue) updatePreventiveMaintenance(p.id, { status: trimmedNew as any });
+        });
+      } else if (categoryKey === 'liabilityStatuses') {
+        liabilities.forEach(l => {
+          if (l.status === oldValue) updateLiability(l.id, { status: trimmedNew as any });
+        });
+      } else if (categoryKey === 'unitsOfMeasure') {
+        liabilities.forEach(l => {
+          if (l.uom === oldValue) updateLiability(l.id, { uom: trimmedNew });
+        });
+      } else if (categoryKey === 'companies') {
+        onboardings.forEach(o => {
+          if (o.company === oldValue) updateOnboarding(o.id, { company: trimmedNew });
+        });
+        offboardings.forEach(o => {
+          if (o.company === oldValue) updateOffboarding(o.id, { company: trimmedNew });
+        });
+        liabilities.forEach(l => {
+          if (l.company === oldValue) updateLiability(l.id, { company: trimmedNew });
+        });
+      } else if (categoryKey === 'locations') {
+        assets.forEach(a => {
+          if (a.location === oldValue) updateAsset(a.id, { location: trimmedNew });
+        });
+      }
+    }
+  };
+
+  const deleteDropdownOption = async (categoryKey: keyof DropdownOptionsConfig, value: string) => {
+    const currentList = dropdownOptions[categoryKey] || [];
+    const updatedList = currentList.filter(item => item !== value);
+    const updatedConfig = { ...dropdownOptions, [categoryKey]: updatedList };
+    setDropdownOptionsState(updatedConfig);
+
+    await logActivity('DROPDOWN_OPTION_DELETE', 'Category', categoryKey, `Removed "${value}" from ${categoryKey} list`);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
+        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
+      }
+    }
+  };
+
+  const resetDropdownCategoryToDefault = async (categoryKey: keyof DropdownOptionsConfig) => {
+    const defaultList = DEFAULT_DROPDOWN_OPTIONS[categoryKey];
+    const updatedConfig = { ...dropdownOptions, [categoryKey]: defaultList };
+    setDropdownOptionsState(updatedConfig);
+
+    await logActivity('DROPDOWN_CATEGORY_RESET', 'Category', categoryKey, `Reset ${categoryKey} to factory defaults`);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
+        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
+      }
+    }
+  };
+
   // 1-Click Seed Initial Data to Firebase
   const seedInitialDataToFirebase = async () => {
     if (!auth.currentUser) return;
@@ -832,8 +1064,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       for (const log of SEED_ACTIVITY_LOGS) {
         await setDoc(doc(db, 'activity_logs', log.id), log);
       }
+      // Seed Dropdown Category Master Data
+      await setDoc(doc(db, 'settings', 'dropdowns'), DEFAULT_DROPDOWN_OPTIONS);
+      await setDoc(doc(db, 'settings', 'global'), INITIAL_SETTINGS);
+
       localStorage.removeItem(LOCAL_STORAGE_PREFIX + 'cleared');
-      await logActivity('DATABASE_SEED', 'System', 'all', 'Seeded initial enterprise dataset to Firebase Firestore');
+      await logActivity('DATABASE_SEED', 'System', 'all', 'Seeded initial enterprise dataset and dropdown categories to Firebase');
     } catch (err) {
       console.error('Seeding error:', err);
     }
@@ -919,6 +1155,7 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         liabilities,
         activityLogs,
         settings,
+        dropdownOptions,
       }
     };
 
@@ -947,6 +1184,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (parsed.data.liabilities) setLiabilities(parsed.data.liabilities);
         if (parsed.data.activityLogs) setActivityLogs(parsed.data.activityLogs);
         if (parsed.data.settings) setSettingsState(parsed.data.settings);
+        if (parsed.data.dropdownOptions) {
+          setDropdownOptionsState(parsed.data.dropdownOptions);
+          if (auth.currentUser) {
+            await setDoc(doc(db, 'settings', 'dropdowns'), parsed.data.dropdownOptions, { merge: true });
+          }
+        }
         await logActivity('BACKUP_RESTORE', 'System', 'snapshot', 'Restored ITM database from JSON backup snapshot');
       }
     } catch (err) {
@@ -975,6 +1218,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         liabilities,
         activityLogs,
         settings,
+        dropdownOptions,
+        updateDropdownOptions,
+        addDropdownOption,
+        editDropdownOption,
+        deleteDropdownOption,
+        resetDropdownCategoryToDefault,
         addAsset,
         updateAsset,
         deleteAsset,

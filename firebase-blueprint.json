@@ -165,6 +165,9 @@
     "/activity_logs/{logId}": {
       "schema": "#/entities/ActivityLog",
       "description": "Audit trails"
+    },
+    "/settings/{settingId}": {
+      "description": "System configuration and database-backed dropdown taxonomy"
     }
   }
 }

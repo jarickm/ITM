@@ -20,14 +20,26 @@ export const LiabilitiesView: React.FC<LiabilitiesViewProps> = ({
   onOpenNewLiability, 
   onEditLiability 
 }) => {
-  const { liabilities, deleteLiability, quickSearchQuery, currentUser } = useITM();
+  const { liabilities, deleteLiability, quickSearchQuery, currentUser, dropdownOptions } = useITM();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+
+  const statuses = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.liabilityStatuses || []), ...liabilities.map(l => l.status)].filter(Boolean)))
+  ], [dropdownOptions.liabilityStatuses, liabilities]);
+
+  const departments = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.departments || []), ...liabilities.map(l => l.department)].filter(Boolean)))
+  ], [dropdownOptions.departments, liabilities]);
 
   const filtered = useMemo(() => {
     const q = (quickSearchQuery || search).trim().toLowerCase();
     return liabilities.filter(l => {
       if (statusFilter !== 'All' && l.status !== statusFilter) return false;
+      if (departmentFilter !== 'All' && l.department !== departmentFilter) return false;
       if (q) {
         const match = 
           l.employeeName.toLowerCase().includes(q) ||
@@ -39,7 +51,7 @@ export const LiabilitiesView: React.FC<LiabilitiesViewProps> = ({
       }
       return true;
     });
-  }, [liabilities, statusFilter, quickSearchQuery, search]);
+  }, [liabilities, statusFilter, departmentFilter, quickSearchQuery, search]);
 
   const exportCSV = () => {
     const headers = [
@@ -130,15 +142,23 @@ export const LiabilitiesView: React.FC<LiabilitiesViewProps> = ({
           </div>
 
           <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+          >
+            {departments.map((d) => (
+              <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>
+            ))}
+          </select>
+
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
-            <option value="All">All Custody Statuses</option>
-            <option value="Active Accountability">Active Accountability</option>
-            <option value="Surrendered">Surrendered</option>
-            <option value="Transferred">Transferred</option>
-            <option value="Lost/Damaged">Lost/Damaged</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s === 'All' ? 'All Custody Statuses' : s}</option>
+            ))}
           </select>
         </div>
 

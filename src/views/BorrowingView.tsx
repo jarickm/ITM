@@ -19,14 +19,26 @@ export const BorrowingView: React.FC<BorrowingViewProps> = ({
   onOpenNewBorrow, 
   onEditBorrow 
 }) => {
-  const { borrowings, updateBorrowing, deleteBorrowing, quickSearchQuery, currentUser } = useITM();
+  const { borrowings, updateBorrowing, deleteBorrowing, quickSearchQuery, currentUser, dropdownOptions } = useITM();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+
+  const statuses = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.borrowStatuses || []), ...borrowings.map(b => b.status)].filter(Boolean)))
+  ], [dropdownOptions.borrowStatuses, borrowings]);
+
+  const departments = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.departments || []), ...borrowings.map(b => b.department)].filter(Boolean)))
+  ], [dropdownOptions.departments, borrowings]);
 
   const filtered = useMemo(() => {
     const q = (quickSearchQuery || search).trim().toLowerCase();
     return borrowings.filter(b => {
       if (statusFilter !== 'All' && b.status !== statusFilter) return false;
+      if (departmentFilter !== 'All' && b.department !== departmentFilter) return false;
       if (q) {
         const match = 
           b.borrowerName.toLowerCase().includes(q) ||
@@ -38,7 +50,7 @@ export const BorrowingView: React.FC<BorrowingViewProps> = ({
       }
       return true;
     });
-  }, [borrowings, statusFilter, quickSearchQuery, search]);
+  }, [borrowings, statusFilter, departmentFilter, quickSearchQuery, search]);
 
   const handleQuickReturn = async (b: BorrowingRecord) => {
     await updateBorrowing(b.id, {
@@ -136,15 +148,23 @@ export const BorrowingView: React.FC<BorrowingViewProps> = ({
           </div>
 
           <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {departments.map((d) => (
+              <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>
+            ))}
+          </select>
+
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
-            <option value="All">All Statuses</option>
-            <option value="Active / Borrowed">Active / Borrowed</option>
-            <option value="Returned">Returned</option>
-            <option value="Overdue">Overdue</option>
-            <option value="Damaged on Return">Damaged on Return</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
+            ))}
           </select>
         </div>
 

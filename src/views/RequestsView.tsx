@@ -19,11 +19,27 @@ export const RequestsView: React.FC<RequestsViewProps> = ({
   onOpenNewRequest, 
   onEditRequest 
 }) => {
-  const { requests, deleteRequest, quickSearchQuery, currentUser } = useITM();
+  const { requests, deleteRequest, quickSearchQuery, currentUser, dropdownOptions } = useITM();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | 'PR' | 'IER'>('All');
   const [priorityFilter, setPriorityFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('All');
+
+  const priorities = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.requestPriorities || []), ...requests.map(r => r.majorOrMinor)].filter(Boolean)))
+  ], [dropdownOptions.requestPriorities, requests]);
+
+  const statuses = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.requestStatuses || []), ...requests.map(r => r.status)].filter(Boolean)))
+  ], [dropdownOptions.requestStatuses, requests]);
+
+  const departments = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.departments || []), ...requests.map(r => r.departmentOrBranches)].filter(Boolean)))
+  ], [dropdownOptions.departments, requests]);
 
   const filtered = useMemo(() => {
     const q = (quickSearchQuery || search).trim().toLowerCase();
@@ -31,6 +47,7 @@ export const RequestsView: React.FC<RequestsViewProps> = ({
       if (typeFilter !== 'All' && r.requestType !== typeFilter) return false;
       if (priorityFilter !== 'All' && r.majorOrMinor !== priorityFilter) return false;
       if (statusFilter !== 'All' && r.status !== statusFilter) return false;
+      if (departmentFilter !== 'All' && r.departmentOrBranches !== departmentFilter) return false;
       if (q) {
         const match = 
           r.referenceNo.toLowerCase().includes(q) ||
@@ -42,7 +59,7 @@ export const RequestsView: React.FC<RequestsViewProps> = ({
       }
       return true;
     });
-  }, [requests, typeFilter, priorityFilter, statusFilter, quickSearchQuery, search]);
+  }, [requests, typeFilter, priorityFilter, statusFilter, departmentFilter, quickSearchQuery, search]);
 
   const exportCSV = () => {
     const headers = [
@@ -168,16 +185,26 @@ export const RequestsView: React.FC<RequestsViewProps> = ({
             </button>
           </div>
 
+          {/* Department Filter */}
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          >
+            {departments.map((d) => (
+              <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>
+            ))}
+          </select>
+
           {/* Major / Minor Filter */}
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
           >
-            <option value="All">All Severities</option>
-            <option value="Minor">Minor</option>
-            <option value="Major">Major</option>
-            <option value="Critical">Critical</option>
+            {priorities.map((p) => (
+              <option key={p} value={p}>{p === 'All' ? 'All Severities' : p}</option>
+            ))}
           </select>
 
           {/* Status Filter */}
@@ -186,12 +213,9 @@ export const RequestsView: React.FC<RequestsViewProps> = ({
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
           >
-            <option value="All">All Statuses</option>
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Pending Approval">Pending Approval</option>
-            <option value="Resolved">Resolved</option>
-            <option value="Closed">Closed</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
+            ))}
           </select>
         </div>
 

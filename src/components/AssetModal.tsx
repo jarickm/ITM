@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Layers, Save, AlertTriangle } from 'lucide-react';
 import { Asset, AssetCategory, AssetStatus } from '../types/itm';
+import { CategoryDropdownField } from './CategoryDropdownField';
+import { useITM } from '../context/ITMContext';
 
 interface AssetModalProps {
   asset: Asset | null;
@@ -8,49 +10,14 @@ interface AssetModalProps {
   onSave: (assetData: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
 }
 
-const CATEGORIES: AssetCategory[] = [
-  'Laptop',
-  'Desktop PC',
-  'Workstation',
-  'Monitor',
-  'Server',
-  'Network & Switch',
-  'Printer & Scanner',
-  'Mobile Device / Tablet',
-  'Peripherals / Accessories',
-  'Software / License',
-];
-
-const STATUSES: AssetStatus[] = [
-  'In Use',
-  'Available',
-  'Under Maintenance',
-  'Defective',
-  'Retired',
-  'Reserved',
-];
-
-const DEPARTMENTS = [
-  'IT Infrastructure',
-  'Engineering',
-  'Design & UX',
-  'Finance',
-  'Human Resources',
-  'Operations',
-  'Sales & BD',
-  'Marketing & Events',
-  'Logistics & Warehouse',
-  'Legal & Compliance',
-  'IT Reserve Pool',
-];
-
 export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }) => {
+  const { dropdownOptions } = useITM();
   const [employeeOrDeviceName, setEmployeeOrDeviceName] = useState(asset?.employeeOrDeviceName || '');
-  const [category, setCategory] = useState<AssetCategory>(asset?.category || 'Laptop');
+  const [category, setCategory] = useState<AssetCategory>(asset?.category || dropdownOptions.assetCategories[0] || 'Laptop');
   const [specificationOrSN, setSpecificationOrSN] = useState(asset?.specificationOrSN || '');
   const [assetCode, setAssetCode] = useState(asset?.assetCode || '');
   const [status, setStatus] = useState<AssetStatus>(asset?.status || 'Available');
-  const [department, setDepartment] = useState(asset?.department || 'IT Reserve Pool');
+  const [department, setDepartment] = useState(asset?.department || dropdownOptions.departments[0] || 'IT Reserve Pool');
   const [purchaseDate, setPurchaseDate] = useState(asset?.purchaseDate || new Date().toISOString().substring(0, 10));
   const [cost, setCost] = useState<string>(asset?.cost ? String(asset.cost) : '');
   const [warrantyExpiry, setWarrantyExpiry] = useState(asset?.warrantyExpiry || '');
@@ -164,20 +131,13 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
             </div>
 
             {/* Category */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Category <span className="text-rose-600">*</span>
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as AssetCategory)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Category"
+              categoryKey="assetCategories"
+              value={category}
+              onChange={(val) => setCategory(val as AssetCategory)}
+              required
+            />
 
             {/* Asset Code */}
             <div className="space-y-1">
@@ -210,36 +170,22 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
             </div>
 
             {/* Status */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Status <span className="text-rose-600">*</span>
-              </label>
-              <select
-                value={status}
-                onChange={(e) => handleStatusChange(e.target.value as AssetStatus)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Status"
+              categoryKey="assetStatuses"
+              value={status}
+              onChange={(val) => handleStatusChange(val as AssetStatus)}
+              required
+            />
 
             {/* Department */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Department <span className="text-rose-600">*</span>
-              </label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                {DEPARTMENTS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Department"
+              categoryKey="departments"
+              value={department}
+              onChange={(val) => setDepartment(val)}
+              required
+            />
 
             {/* Purchase Date */}
             <div className="space-y-1">
@@ -284,18 +230,13 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
             </div>
 
             {/* Physical Location */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Physical Location / Room
-              </label>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. HQ Floor 3 - Room 304 or IT Vault"
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Physical Location / Room"
+              categoryKey="locations"
+              value={location}
+              onChange={(val) => setLocation(val)}
+              placeholder="-- Select or Add Location --"
+            />
           </div>
 
           {/* Notes */}

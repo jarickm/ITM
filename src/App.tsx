@@ -330,8 +330,12 @@ const MainAppContent: React.FC = () => {
             <ActivityLogsView />
           )}
 
+          {activeTab === 'categories' && (
+            <SettingsView initialTab="dropdowns" />
+          )}
+
           {activeTab === 'settings' && (
-            <SettingsView />
+            <SettingsView initialTab="general" />
           )}
         </main>
       </div>

@@ -17,14 +17,28 @@ interface PROnlyViewProps {
 }
 
 export const PROnlyView: React.FC<PROnlyViewProps> = ({ onOpenNewPR, onEditRequest }) => {
-  const { requests, deleteRequest, quickSearchQuery, currentUser } = useITM();
+  const { requests, deleteRequest, quickSearchQuery, currentUser, dropdownOptions } = useITM();
   const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+
+  const departments = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.departments || []), ...requests.filter(r => r.requestType === 'PR').map(r => r.departmentOrBranches)].filter(Boolean)))
+  ], [dropdownOptions.departments, requests]);
+
+  const statuses = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.requestStatuses || []), ...requests.filter(r => r.requestType === 'PR').map(r => r.status)].filter(Boolean)))
+  ], [dropdownOptions.requestStatuses, requests]);
 
   const prList = useMemo(() => {
     const q = (quickSearchQuery || search).trim().toLowerCase();
     return requests
       .filter(r => r.requestType === 'PR')
       .filter(r => {
+        if (departmentFilter !== 'All' && r.departmentOrBranches !== departmentFilter) return false;
+        if (statusFilter !== 'All' && r.status !== statusFilter) return false;
         if (q) {
           const match = 
             r.referenceNo.toLowerCase().includes(q) ||
@@ -35,7 +49,7 @@ export const PROnlyView: React.FC<PROnlyViewProps> = ({ onOpenNewPR, onEditReque
         }
         return true;
       });
-  }, [requests, quickSearchQuery, search]);
+  }, [requests, departmentFilter, statusFilter, quickSearchQuery, search]);
 
   const totalPRAmount = prList.reduce((acc, r) => acc + (r.estimatedAmount || 0), 0);
 
@@ -132,15 +146,37 @@ export const PROnlyView: React.FC<PROnlyViewProps> = ({ onOpenNewPR, onEditReque
 
       {/* Filter toolbar */}
       <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-3 text-xs shadow-xs">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search PR ref #, requester, remarks..."
-            className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
-          />
+        <div className="flex items-center gap-2 flex-1 max-w-lg">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search PR ref #, requester, remarks..."
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
+            />
+          </div>
+
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          >
+            {departments.map((d) => (
+              <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>
+            ))}
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          >
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
+            ))}
+          </select>
         </div>
 
         <div className="text-[11px] text-slate-500 font-mono">

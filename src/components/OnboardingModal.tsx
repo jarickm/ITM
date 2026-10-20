@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, UserPlus, Save } from 'lucide-react';
 import { OnboardingRecord, OnboardingStatus } from '../types/itm';
 import { useITM } from '../context/ITMContext';
+import { CategoryDropdownField } from './CategoryDropdownField';
 
 interface OnboardingModalProps {
   record: OnboardingRecord | null;
@@ -10,12 +11,12 @@ interface OnboardingModalProps {
 }
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({ record, onClose, onSave }) => {
-  const { assets, settings } = useITM();
+  const { assets, settings, dropdownOptions } = useITM();
   const [employeeName, setEmployeeName] = useState(record?.employeeName || '');
-  const [department, setDepartment] = useState(record?.department || 'Engineering');
+  const [department, setDepartment] = useState(record?.department || dropdownOptions.departments[0] || 'Engineering');
   const [position, setPosition] = useState(record?.position || '');
   const [startDate, setStartDate] = useState(record?.startDate || new Date().toISOString().substring(0, 10));
-  const [company, setCompany] = useState(record?.company || settings.companyName);
+  const [company, setCompany] = useState(record?.company || settings.companyName || dropdownOptions.companies[0] || '');
   const [controlNumber, setControlNumber] = useState(
     record?.controlNumber || `ONB-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`
   );
@@ -118,19 +119,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ record, onClos
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Department *
-              </label>
-              <input
-                type="text"
-                required
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="Engineering / Sales / HR"
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Department"
+              categoryKey="departments"
+              value={department}
+              onChange={(val) => setDepartment(val)}
+              required
+            />
 
             <div className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -172,34 +167,21 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ record, onClos
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Company *
-              </label>
-              <input
-                type="text"
-                required
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Company"
+              categoryKey="companies"
+              value={company}
+              onChange={(val) => setCompany(val)}
+              required
+            />
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Status *
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as OnboardingStatus)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
-              >
-                <option value="Pending">Pending</option>
-                <option value="Equipment Assigned">Equipment Assigned</option>
-                <option value="Completed">Completed</option>
-                <option value="Delayed">Delayed</option>
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Status"
+              categoryKey="onboardingStatuses"
+              value={status}
+              onChange={(val) => setStatus(val as OnboardingStatus)}
+              required
+            />
           </div>
 
           {/* Assigned Assets Allocation */}

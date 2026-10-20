@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Save } from 'lucide-react';
 import { RequestRecord, RequestType, RequestPriority, RequestStatus } from '../types/itm';
+import { useITM } from '../context/ITMContext';
+import { CategoryDropdownField } from './CategoryDropdownField';
 
 interface RequestModalProps {
   record: RequestRecord | null;
@@ -15,12 +17,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({
   onClose, 
   onSave 
 }) => {
+  const { dropdownOptions } = useITM();
   const [requestType, setRequestType] = useState<RequestType>(record?.requestType || defaultType);
   const [referenceNo, setReferenceNo] = useState(record?.referenceNo || '');
   const [dateReported, setDateReported] = useState(record?.dateReported || new Date().toISOString().substring(0, 10));
   const [dateCreated, setDateCreated] = useState(record?.dateCreated || new Date().toISOString().substring(0, 10));
   const [employeeOrRequesterName, setEmployeeOrRequesterName] = useState(record?.employeeOrRequesterName || '');
-  const [departmentOrBranches, setDepartmentOrBranches] = useState(record?.departmentOrBranches || '');
+  const [departmentOrBranches, setDepartmentOrBranches] = useState(record?.departmentOrBranches || dropdownOptions.departments[0] || '');
   const [actionsTakenOrRemarks, setActionsTakenOrRemarks] = useState(record?.actionsTakenOrRemarks || '');
   const [dateResolved, setDateResolved] = useState(record?.dateResolved || '');
   const [days, setDays] = useState<number>(record?.days || 0);
@@ -108,19 +111,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Request Type */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Request Type *
-              </label>
-              <select
-                value={requestType}
-                onChange={(e) => setRequestType(e.target.value as RequestType)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="PR">PR (Purchase Request)</option>
-                <option value="IER">IER (Incident / Equipment Request)</option>
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Request Type"
+              categoryKey="requestTypes"
+              value={requestType}
+              onChange={(val) => setRequestType(val as RequestType)}
+              required
+            />
 
             {/* Reference No */}
             <div className="space-y-1">
@@ -180,54 +177,31 @@ export const RequestModal: React.FC<RequestModalProps> = ({
             </div>
 
             {/* Department / Branches */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Department / Branches *
-              </label>
-              <input
-                type="text"
-                required
-                value={departmentOrBranches}
-                onChange={(e) => setDepartmentOrBranches(e.target.value)}
-                placeholder="e.g. HQ - Finance or Branch Cebu"
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Department / Branches"
+              categoryKey="departments"
+              value={departmentOrBranches}
+              onChange={(val) => setDepartmentOrBranches(val)}
+              required
+            />
 
             {/* Major / Minor */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Severity / Classification *
-              </label>
-              <select
-                value={majorOrMinor}
-                onChange={(e) => setMajorOrMinor(e.target.value as RequestPriority)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="Minor">Minor (Routine)</option>
-                <option value="Major">Major (High Priority)</option>
-                <option value="Critical">Critical (Immediate SLA)</option>
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Severity / Classification"
+              categoryKey="requestPriorities"
+              value={majorOrMinor}
+              onChange={(val) => setMajorOrMinor(val as RequestPriority)}
+              required
+            />
 
             {/* Status */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Ticket Status *
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as RequestStatus)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Pending Approval">Pending Approval</option>
-                <option value="Resolved">Resolved</option>
-                <option value="Closed">Closed</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Ticket Status"
+              categoryKey="requestStatuses"
+              value={status}
+              onChange={(val) => setStatus(val as RequestStatus)}
+              required
+            />
 
             {/* DATE RESOLVED */}
             <div className="space-y-1">

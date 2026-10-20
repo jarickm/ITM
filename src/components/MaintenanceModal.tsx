@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Wrench, Save } from 'lucide-react';
 import { PreventiveMaintenanceRecord, PMStatus } from '../types/itm';
 import { useITM } from '../context/ITMContext';
+import { CategoryDropdownField } from './CategoryDropdownField';
 
 interface MaintenanceModalProps {
   record: PreventiveMaintenanceRecord | null;
@@ -10,7 +11,7 @@ interface MaintenanceModalProps {
 }
 
 export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({ record, onClose, onSave }) => {
-  const { assets } = useITM();
+  const { assets, dropdownOptions } = useITM();
   const [description, setDescription] = useState(record?.description || '');
   const [date, setDate] = useState(record?.date || new Date().toISOString().substring(0, 10));
   const [datePurchase, setDatePurchase] = useState(record?.datePurchase || '');
@@ -19,7 +20,7 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({ record, onCl
   const [performedBy, setPerformedBy] = useState(record?.performedBy || '');
   const [status, setStatus] = useState<PMStatus>(record?.status || 'Completed');
   const [recommendation, setRecommendation] = useState(record?.recommendation || '');
-  const [department, setDepartment] = useState(record?.department || '');
+  const [department, setDepartment] = useState(record?.department || dropdownOptions.departments[0] || '');
   const [nextMaintenanceDate, setNextMaintenanceDate] = useState(record?.nextMaintenanceDate || '');
   const [cost, setCost] = useState<string>(record?.cost ? String(record.cost) : '');
   const [loading, setLoading] = useState(false);
@@ -118,18 +119,13 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({ record, onCl
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Department *
-              </label>
-              <input
-                type="text"
-                required
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Department"
+              categoryKey="departments"
+              value={department}
+              onChange={(val) => setDepartment(val)}
+              required
+            />
 
             <div className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -171,21 +167,13 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({ record, onCl
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                PM Status *
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PMStatus)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              >
-                <option value="Completed">Completed</option>
-                <option value="Scheduled">Scheduled</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Requires Replacement">Requires Replacement</option>
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="PM Status"
+              categoryKey="pmStatuses"
+              value={status}
+              onChange={(val) => setStatus(val as PMStatus)}
+              required
+            />
 
             <div className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">

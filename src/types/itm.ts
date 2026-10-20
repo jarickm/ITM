@@ -4,7 +4,8 @@ export type AssetStatus =
   | 'Under Maintenance' 
   | 'Defective' 
   | 'Retired' 
-  | 'Reserved';
+  | 'Reserved'
+  | (string & {});
 
 export type AssetCategory = 
   | 'Laptop' 
@@ -16,7 +17,25 @@ export type AssetCategory =
   | 'Printer & Scanner' 
   | 'Mobile Device / Tablet' 
   | 'Peripherals / Accessories' 
-  | 'Software / License';
+  | 'Software / License'
+  | (string & {});
+
+export interface DropdownOptionsConfig {
+  departments: string[];
+  assetCategories: string[];
+  assetStatuses: string[];
+  requestTypes: string[];
+  requestPriorities: string[];
+  requestStatuses: string[];
+  onboardingStatuses: string[];
+  offboardingStatuses: string[];
+  borrowStatuses: string[];
+  pmStatuses: string[];
+  liabilityStatuses: string[];
+  unitsOfMeasure: string[];
+  companies: string[];
+  locations: string[];
+}
 
 export interface Asset {
   id: string;
@@ -41,7 +60,7 @@ export interface Asset {
   updatedAt: string;
 }
 
-export type OnboardingStatus = 'Pending' | 'Equipment Assigned' | 'Completed' | 'Delayed';
+export type OnboardingStatus = 'Pending' | 'Equipment Assigned' | 'Completed' | 'Delayed' | (string & {});
 
 export interface OnboardingRecord {
   id: string;
@@ -59,7 +78,7 @@ export interface OnboardingRecord {
   updatedAt: string;
 }
 
-export type OffboardingStatus = 'Pending Surrender' | 'Partially Returned' | 'Cleared' | 'Disputed';
+export type OffboardingStatus = 'Pending Surrender' | 'Partially Returned' | 'Cleared' | 'Disputed' | (string & {});
 
 export interface OffboardingRecord {
   id: string;
@@ -78,9 +97,9 @@ export interface OffboardingRecord {
   updatedAt: string;
 }
 
-export type RequestType = 'PR' | 'IER'; // Purchase Request or Incident/Equipment Request
-export type RequestPriority = 'Major' | 'Minor' | 'Critical';
-export type RequestStatus = 'Open' | 'In Progress' | 'Pending Approval' | 'Resolved' | 'Closed' | 'Cancelled';
+export type RequestType = 'PR' | 'IER' | (string & {}); // Purchase Request or Incident/Equipment Request
+export type RequestPriority = 'Major' | 'Minor' | 'Critical' | (string & {});
+export type RequestStatus = 'Open' | 'In Progress' | 'Pending Approval' | 'Resolved' | 'Closed' | 'Cancelled' | (string & {});
 
 export interface RequestRecord {
   id: string;
@@ -101,7 +120,7 @@ export interface RequestRecord {
   updatedAt: string;
 }
 
-export type BorrowStatus = 'Active / Borrowed' | 'Returned' | 'Overdue' | 'Damaged on Return';
+export type BorrowStatus = 'Active / Borrowed' | 'Returned' | 'Overdue' | 'Damaged on Return' | (string & {});
 
 export interface BorrowingRecord {
   id: string;
@@ -118,7 +137,7 @@ export interface BorrowingRecord {
   updatedAt: string;
 }
 
-export type PMStatus = 'Scheduled' | 'In Progress' | 'Completed' | 'Requires Replacement';
+export type PMStatus = 'Scheduled' | 'In Progress' | 'Completed' | 'Requires Replacement' | (string & {});
 
 export interface PreventiveMaintenanceRecord {
   id: string;
@@ -137,7 +156,7 @@ export interface PreventiveMaintenanceRecord {
   updatedAt: string;
 }
 
-export type LiabilityStatus = 'Active Accountability' | 'Surrendered' | 'Transferred' | 'Lost/Damaged';
+export type LiabilityStatus = 'Active Accountability' | 'Surrendered' | 'Transferred' | 'Lost/Damaged' | (string & {});
 
 export interface LiabilityRecord {
   id: string;
@@ -186,4 +205,5 @@ export interface SystemSettings {
   alertEmail: string;
   adDomain: string;
   lastBackupDate?: string;
+  dropdownOptions?: DropdownOptionsConfig;
 }

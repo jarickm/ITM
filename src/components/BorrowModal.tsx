@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Repeat, Save } from 'lucide-react';
 import { BorrowingRecord, BorrowStatus } from '../types/itm';
 import { useITM } from '../context/ITMContext';
+import { CategoryDropdownField } from './CategoryDropdownField';
 
 interface BorrowModalProps {
   record: BorrowingRecord | null;
@@ -10,10 +11,10 @@ interface BorrowModalProps {
 }
 
 export const BorrowModal: React.FC<BorrowModalProps> = ({ record, onClose, onSave }) => {
-  const { assets } = useITM();
+  const { assets, dropdownOptions } = useITM();
   const [borrowerName, setBorrowerName] = useState(record?.borrowerName || '');
-  const [department, setDepartment] = useState(record?.department || '');
-  const [itemCategory, setItemCategory] = useState(record?.itemCategory || 'Laptop');
+  const [department, setDepartment] = useState(record?.department || dropdownOptions.departments[0] || '');
+  const [itemCategory, setItemCategory] = useState(record?.itemCategory || dropdownOptions.assetCategories[0] || 'Laptop');
   const [assetCode, setAssetCode] = useState(record?.assetCode || '');
   const [borrowDate, setBorrowDate] = useState(record?.borrowDate || new Date().toISOString().substring(0, 10));
   const [returnDate, setReturnDate] = useState(record?.returnDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10));
@@ -87,33 +88,21 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({ record, onClose, onSav
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Department *
-              </label>
-              <input
-                type="text"
-                required
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="Marketing / Client Success / Audit"
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Department"
+              categoryKey="departments"
+              value={department}
+              onChange={(val) => setDepartment(val)}
+              required
+            />
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Item Category *
-              </label>
-              <input
-                type="text"
-                required
-                value={itemCategory}
-                onChange={(e) => setItemCategory(e.target.value)}
-                placeholder="Laptop, Projector, Adapter, Scanner..."
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Item Category"
+              categoryKey="assetCategories"
+              value={itemCategory}
+              onChange={(val) => setItemCategory(val)}
+              required
+            />
 
             <div className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -154,27 +143,18 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({ record, onClose, onSav
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Status *
-              </label>
-              <select
-                value={status}
-                onChange={(e) => {
-                  const s = e.target.value as BorrowStatus;
-                  setStatus(s);
-                  if (s === 'Returned' && !actualReturnDate) {
-                    setActualReturnDate(new Date().toISOString().substring(0, 10));
-                  }
-                }}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="Active / Borrowed">Active / Borrowed</option>
-                <option value="Returned">Returned</option>
-                <option value="Overdue">Overdue</option>
-                <option value="Damaged on Return">Damaged on Return</option>
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Status"
+              categoryKey="borrowStatuses"
+              value={status}
+              onChange={(val) => {
+                setStatus(val as BorrowStatus);
+                if (val === 'Returned' && !actualReturnDate) {
+                  setActualReturnDate(new Date().toISOString().substring(0, 10));
+                }
+              }}
+              required
+            />
 
             <div className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">

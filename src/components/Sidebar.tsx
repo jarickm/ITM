@@ -13,6 +13,7 @@ import {
   QrCode, 
   History, 
   Settings,
+  Sliders,
   ChevronRight
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
@@ -127,6 +128,14 @@ export const Sidebar: React.FC = () => {
       icon: History,
       badge: null,
       color: 'text-slate-500',
+    },
+    {
+      id: 'categories',
+      label: 'Dropdown Categories',
+      icon: Sliders,
+      badge: 'Master',
+      badgeColor: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+      color: 'text-indigo-600',
     },
     {
       id: 'settings',

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, UserMinus, Save, ShieldCheck } from 'lucide-react';
 import { OffboardingRecord, OffboardingStatus } from '../types/itm';
 import { useITM } from '../context/ITMContext';
+import { CategoryDropdownField } from './CategoryDropdownField';
 
 interface OffboardingModalProps {
   record: OffboardingRecord | null;
@@ -10,12 +11,12 @@ interface OffboardingModalProps {
 }
 
 export const OffboardingModal: React.FC<OffboardingModalProps> = ({ record, onClose, onSave }) => {
-  const { settings } = useITM();
+  const { settings, dropdownOptions } = useITM();
   const [employeeName, setEmployeeName] = useState(record?.employeeName || '');
-  const [department, setDepartment] = useState(record?.department || 'Operations');
+  const [department, setDepartment] = useState(record?.department || dropdownOptions.departments[0] || 'Operations');
   const [position, setPosition] = useState(record?.position || '');
   const [separationDate, setSeparationDate] = useState(record?.separationDate || new Date().toISOString().substring(0, 10));
-  const [company, setCompany] = useState(record?.company || settings.companyName);
+  const [company, setCompany] = useState(record?.company || settings.companyName || dropdownOptions.companies[0] || '');
   const [controlNumber, setControlNumber] = useState(
     record?.controlNumber || `OFF-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`
   );
@@ -106,18 +107,13 @@ export const OffboardingModal: React.FC<OffboardingModalProps> = ({ record, onCl
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Department *
-              </label>
-              <input
-                type="text"
-                required
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Department"
+              categoryKey="departments"
+              value={department}
+              onChange={(val) => setDepartment(val)}
+              required
+            />
 
             <div className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -145,38 +141,25 @@ export const OffboardingModal: React.FC<OffboardingModalProps> = ({ record, onCl
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Company *
-              </label>
-              <input
-                type="text"
-                required
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
-              />
-            </div>
+            <CategoryDropdownField
+              label="Company"
+              categoryKey="companies"
+              value={company}
+              onChange={(val) => setCompany(val)}
+              required
+            />
 
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                Clearance Status *
-              </label>
-              <select
-                value={status}
-                onChange={(e) => {
-                  const s = e.target.value as OffboardingStatus;
-                  setStatus(s);
-                  if (s === 'Cleared') setItClearanceSignOff(true);
-                }}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
-              >
-                <option value="Pending Surrender">Pending Surrender</option>
-                <option value="Partially Returned">Partially Returned</option>
-                <option value="Cleared">Cleared (All IT Assets Surrendered)</option>
-                <option value="Disputed">Disputed / Missing Hardware</option>
-              </select>
-            </div>
+            <CategoryDropdownField
+              label="Clearance Status"
+              categoryKey="offboardingStatuses"
+              value={status}
+              onChange={(val) => {
+                setStatus(val as OffboardingStatus);
+                if (val === 'Cleared') setItClearanceSignOff(true);
+              }}
+              required
+              className="sm:col-span-2"
+            />
           </div>
 
           <div className="space-y-3 pt-2 border-t border-slate-200">

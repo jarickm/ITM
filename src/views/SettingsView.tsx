@@ -11,11 +11,19 @@ import {
   Layers, 
   RefreshCw,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Sliders
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
+import { DropdownManager } from '../components/DropdownManager';
 
-export const SettingsView: React.FC = () => {
+export type SettingsSubTab = 'dropdowns' | 'general' | 'thresholds' | 'database' | 'rbac';
+
+interface SettingsViewProps {
+  initialTab?: SettingsSubTab;
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'dropdowns' }) => {
   const { 
     settings, 
     updateSettings, 
@@ -27,6 +35,7 @@ export const SettingsView: React.FC = () => {
     isFirebaseConnected 
   } = useITM();
 
+  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(initialTab);
   const [companyName, setCompanyName] = useState(settings.companyName);
   const [alertEmail, setAlertEmail] = useState(settings.alertEmail);
   const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(settings.emailAlertsEnabled);
@@ -102,14 +111,15 @@ export const SettingsView: React.FC = () => {
     setClearing(true);
     await clearAllData();
     setClearing(false);
-    setClearNotice('All system data cleared successfully! You can now start adding your real records.');
+    setClearNotice('All system records cleared. You can now start adding your organization\'s live data.');
     setTimeout(() => setClearNotice(null), 6000);
   };
 
   const handleClearAssets = async () => {
     const ok = window.confirm(
-      'Clear all inventory asset items?\n\n' +
-      'This will wipe only the asset catalog so you can register your company\'s devices, leaving your settings intact.'
+      'Clear Asset Inventory Only?\n\n' +
+      'This deletes all records in the hardware asset catalog while preserving user accounts, settings, and other categories.\n\n' +
+      'Click OK to proceed.'
     );
     if (!ok) return;
 
@@ -121,112 +131,232 @@ export const SettingsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl animate-fadeIn">
-      {/* Header */}
-      <div className="pb-2 border-b border-slate-200">
+    <div className="space-y-6 max-w-6xl animate-fadeIn pb-12">
+      {/* View Header */}
+      <div className="pb-3 border-b border-slate-200">
         <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
           <span className="p-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
             <Settings className="w-5 h-5" />
           </span>
-          System Settings & Cloud Database Backups
+          System Settings & Master Data Management
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Configure stock alert thresholds, automated cloud backup schedules, active directory SSO and role permissions
+          Manage dropdown taxonomy, customize department lists and operational categories, configure automated stock alerts, and oversee cloud backups.
         </p>
       </div>
 
-      <form onSubmit={handleSaveSettings} className="space-y-6">
-        {/* Company & Identity */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
-          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-indigo-600" />
-            Enterprise Organization & Domain Setup
-          </h2>
+      {/* Sub-tab Navigation */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-xl bg-slate-200/70 border border-slate-300/80">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('dropdowns')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+            activeSubTab === 'dropdowns'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Dropdowns & Categories</span>
+          <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
+            activeSubTab === 'dropdowns' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'
+          }`}>
+            14 Masters
+          </span>
+        </button>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('general')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeSubTab === 'general'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Enterprise & Identity</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('thresholds')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeSubTab === 'thresholds'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
+          }`}
+        >
+          <Bell className="w-4 h-4" />
+          <span>Stock Alert Triggers</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('database')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeSubTab === 'database'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Database & Cloud Backups</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('rbac')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeSubTab === 'rbac'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>RBAC Matrix</span>
+        </button>
+      </div>
+
+      {/* Tab 1: Dropdown & Category Master Manager */}
+      {activeSubTab === 'dropdowns' && (
+        <DropdownManager />
+      )}
+
+      {/* Tab 2: Enterprise & Identity Setup */}
+      {activeSubTab === 'general' && (
+        <form onSubmit={handleSaveSettings} className="space-y-6">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-indigo-600" />
+              Enterprise Organization & Domain Setup
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  Organization / Company Legal Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  Active Directory / LDAP SSO Domain
+                </label>
+                <input
+                  type="text"
+                  value={adDomain}
+                  onChange={(e) => setAdDomain(e.target.value)}
+                  placeholder="CORP.DOMAIN.INTERNAL"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-indigo-700 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            {saveSuccess ? (
+              <span className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
+                <CheckCircle2 className="w-4 h-4" />
+                Settings saved and active in database!
+              </span>
+            ) : <span />}
+
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-xs transition-all text-xs"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save Organization Settings</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab 3: Stock Alert Triggers */}
+      {activeSubTab === 'thresholds' && (
+        <form onSubmit={handleSaveSettings} className="space-y-6">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-600" />
+                User-Defined Stock Alert Thresholds & Automated Notifications
+              </h2>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailAlertsEnabled}
+                  onChange={(e) => setEmailAlertsEnabled(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-xs text-slate-700 font-medium">Enable Automated Email Dispatch</span>
+              </label>
+            </div>
+
             <div className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                Organization / Company Legal Name
+                Alert Notification Recipient Email
               </label>
               <input
-                type="text"
-                required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                type="email"
+                value={alertEmail}
+                onChange={(e) => setAlertEmail(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
               />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2 pt-2">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                Active Directory / LDAP SSO Domain
+                Low-Stock Reorder Triggers (Minimum Available Reserve Count):
               </label>
-              <input
-                type="text"
-                value={adDomain}
-                onChange={(e) => setAdDomain(e.target.value)}
-                placeholder="CORP.DOMAIN.INTERNAL"
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-indigo-700 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* User-Defined Stock Alert Thresholds & Email Notifications */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Bell className="w-4 h-4 text-amber-600" />
-              User-Defined Stock Alert Thresholds & Automated Notifications
-            </h2>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={emailAlertsEnabled}
-                onChange={(e) => setEmailAlertsEnabled(e.target.checked)}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-xs text-slate-700 font-medium">Enable Automated Email Dispatch</span>
-            </label>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Alert Notification Recipient Email
-            </label>
-            <input
-              type="email"
-              value={alertEmail}
-              onChange={(e) => setAlertEmail(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
-            />
-          </div>
-
-          <div className="space-y-2 pt-2">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Low-Stock Reorder Triggers (Minimum Available Reserve Count):
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {['Laptop', 'Desktop PC', 'Monitor', 'Network & Switch', 'Peripherals / Accessories'].map((cat) => (
-                <div key={cat} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="text-[11px] text-slate-700 font-semibold truncate">{cat}</div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      value={thresholds[cat] ?? 3}
-                      onChange={(e) => handleThresholdChange(cat, parseInt(e.target.value) || 0)}
-                      className="w-16 bg-white border border-slate-300 rounded px-2 py-1 text-xs text-amber-700 font-mono font-bold"
-                    />
-                    <span className="text-[10px] text-slate-500">units</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {['Laptop', 'Desktop PC', 'Monitor', 'Network & Switch', 'Peripherals / Accessories', 'Server', 'Workstation'].map((cat) => (
+                  <div key={cat} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="text-[11px] text-slate-700 font-semibold truncate">{cat}</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        value={thresholds[cat] ?? 3}
+                        onChange={(e) => handleThresholdChange(cat, parseInt(e.target.value) || 0)}
+                        className="w-16 bg-white border border-slate-300 rounded px-2 py-1 text-xs text-amber-700 font-mono font-bold"
+                      />
+                      <span className="text-[10px] text-slate-500">units</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Database & Cloud Backup Management */}
+          <div className="flex items-center justify-between pt-2">
+            {saveSuccess ? (
+              <span className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
+                <CheckCircle2 className="w-4 h-4" />
+                Thresholds saved to database!
+              </span>
+            ) : <span />}
+
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-xs transition-all text-xs"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save Stock Thresholds</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab 4: Database & Cloud Backup Management */}
+      {activeSubTab === 'database' && (
         <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <Database className="w-4 h-4 text-indigo-600" />
@@ -351,8 +481,10 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
 
-        {/* Multi-Level Role-Based Access Control (RBAC) Matrix */}
+      {/* Tab 5: Multi-Level Role-Based Access Control (RBAC) Matrix */}
+      {activeSubTab === 'rbac' && (
         <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -413,25 +545,7 @@ export const SettingsView: React.FC = () => {
             </table>
           </div>
         </div>
-
-        {/* Save Bar */}
-        <div className="flex items-center justify-between pt-2">
-          {saveSuccess ? (
-            <span className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
-              <CheckCircle2 className="w-4 h-4" />
-              Settings saved and active!
-            </span>
-          ) : <span />}
-
-          <button
-            type="submit"
-            className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-xs transition-all text-xs"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save System Settings</span>
-          </button>
-        </div>
-      </form>
+      )}
     </div>
   );
 };

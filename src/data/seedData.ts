@@ -7,8 +7,119 @@ import {
   PreventiveMaintenanceRecord, 
   LiabilityRecord, 
   ActivityLog,
-  SystemSettings 
+  SystemSettings,
+  DropdownOptionsConfig 
 } from '../types/itm';
+
+export const DEFAULT_DROPDOWN_OPTIONS: DropdownOptionsConfig = {
+  departments: [
+    'IT Infrastructure',
+    'Engineering',
+    'Design & UX',
+    'Finance',
+    'Human Resources',
+    'Operations',
+    'Sales & BD',
+    'Marketing & Events',
+    'Logistics & Warehouse',
+    'Legal & Compliance',
+    'Quality Assurance',
+    'Customer Support',
+    'IT Reserve Pool',
+  ],
+  assetCategories: [
+    'Laptop',
+    'Desktop PC',
+    'Workstation',
+    'Monitor',
+    'Server',
+    'Network & Switch',
+    'Printer & Scanner',
+    'Mobile Device / Tablet',
+    'Peripherals / Accessories',
+    'Software / License',
+    'Audio / Video & Conference',
+    'Security & Surveillance',
+  ],
+  assetStatuses: [
+    'In Use',
+    'Available',
+    'Under Maintenance',
+    'Defective',
+    'Retired',
+    'Reserved',
+  ],
+  requestTypes: [
+    'PR',
+    'IER',
+  ],
+  requestPriorities: [
+    'Minor',
+    'Major',
+    'Critical',
+  ],
+  requestStatuses: [
+    'Open',
+    'In Progress',
+    'Pending Approval',
+    'Resolved',
+    'Closed',
+    'Cancelled',
+  ],
+  onboardingStatuses: [
+    'Pending',
+    'Equipment Assigned',
+    'Completed',
+    'Delayed',
+  ],
+  offboardingStatuses: [
+    'Pending Surrender',
+    'Partially Returned',
+    'Cleared',
+    'Disputed',
+  ],
+  borrowStatuses: [
+    'Active / Borrowed',
+    'Returned',
+    'Overdue',
+    'Damaged on Return',
+  ],
+  pmStatuses: [
+    'Scheduled',
+    'In Progress',
+    'Completed',
+    'Requires Replacement',
+  ],
+  liabilityStatuses: [
+    'Active Accountability',
+    'Surrendered',
+    'Transferred',
+    'Lost/Damaged',
+  ],
+  unitsOfMeasure: [
+    'Unit',
+    'Sets',
+    'Pcs',
+    'Box',
+    'Package',
+    'Roll',
+    'Kit',
+  ],
+  companies: [
+    'Apex Global Enterprises IT Services',
+    'Apex Logistics Corp',
+    'Apex Digital Solutions',
+  ],
+  locations: [
+    'HQ Floor 4 - Room 402',
+    'HQ Floor 3 - Creative Lab',
+    'IT Vault - Cabinet B2',
+    'Building B - Finance Ops',
+    'IT Repair Bay - RMA Shelf',
+    'Warehouse Distribution Center',
+    'Server Room Data Center Rack 1',
+  ],
+};
 
 export const INITIAL_SETTINGS: SystemSettings = {
   companyName: 'Apex Global Enterprises IT Services',
@@ -23,6 +134,7 @@ export const INITIAL_SETTINGS: SystemSettings = {
   alertEmail: 'jmmontojo2022@gmail.com',
   adDomain: 'CORP.APEXGLOBAL.INTERNAL',
   lastBackupDate: new Date().toISOString(),
+  dropdownOptions: DEFAULT_DROPDOWN_OPTIONS,
 };
 
 export const SEED_ASSETS: Asset[] = [

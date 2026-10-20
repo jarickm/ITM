@@ -21,14 +21,14 @@ import {
 } from '../utils/printHelper';
 
 export const QRStudioView: React.FC = () => {
-  const { assets, settings } = useITM();
+  const { assets, settings, dropdownOptions } = useITM();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedIds, setSelectedIds] = useState<string[]>(assets.map(a => a.id));
   const [labelSize, setLabelSize] = useState<'standard' | 'compact' | 'zebra'>('standard');
   const [qrMap, setQrMap] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const categories = ['All', ...new Set(assets.map(a => a.category))];
+  const categories = ['All', ...Array.from(new Set([...(dropdownOptions.assetCategories || []), ...assets.map(a => a.category)].filter(Boolean)))];
 
   const displayedAssets = assets.filter(a => {
     if (selectedCategory !== 'All' && a.category !== selectedCategory) return false;

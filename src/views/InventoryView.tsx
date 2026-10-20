@@ -36,7 +36,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     currentUser,
     clearAllData,
     clearAssetsOnly,
-    seedInitialDataToFirebase
+    seedInitialDataToFirebase,
+    dropdownOptions
   } = useITM();
 
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
@@ -48,9 +49,20 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [clearStatus, setClearStatus] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
 
-  const categories = useMemo(() => ['All', ...new Set(assets.map(a => a.category))], [assets]);
-  const departments = useMemo(() => ['All', ...new Set(assets.map(a => a.department))], [assets]);
-  const statuses = ['All', 'In Use', 'Available', 'Under Maintenance', 'Defective', 'Retired', 'Reserved'];
+  const categories = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.assetCategories || []), ...assets.map(a => a.category)].filter(Boolean)))
+  ], [dropdownOptions.assetCategories, assets]);
+
+  const departments = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.departments || []), ...assets.map(a => a.department)].filter(Boolean)))
+  ], [dropdownOptions.departments, assets]);
+
+  const statuses = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.assetStatuses || []), ...assets.map(a => a.status)].filter(Boolean)))
+  ], [dropdownOptions.assetStatuses, assets]);
 
   const filteredAssets = useMemo(() => {
     const q = (quickSearchQuery || localSearch).trim().toLowerCase();

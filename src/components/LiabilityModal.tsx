@@ -3,6 +3,7 @@ import { X, ClipboardCheck, Save, Printer } from 'lucide-react';
 import { LiabilityRecord, LiabilityStatus } from '../types/itm';
 import { useITM } from '../context/ITMContext';
 import { executePrint } from '../utils/printHelper';
+import { CategoryDropdownField } from './CategoryDropdownField';
 
 interface LiabilityModalProps {
   record: LiabilityRecord | null;
@@ -266,31 +267,21 @@ export const LiabilityModal: React.FC<LiabilityModalProps> = ({ record, onClose,
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                  Department *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
+              <CategoryDropdownField
+                label="Department"
+                categoryKey="departments"
+                value={department}
+                onChange={(val) => setDepartment(val)}
+                required
+              />
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                  Company *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
+              <CategoryDropdownField
+                label="Company"
+                categoryKey="companies"
+                value={company}
+                onChange={(val) => setCompany(val)}
+                required
+              />
 
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -306,22 +297,13 @@ export const LiabilityModal: React.FC<LiabilityModalProps> = ({ record, onClose,
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                  UOM (Unit of Measure) *
-                </label>
-                <select
-                  value={uom}
-                  onChange={(e) => setUom(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                >
-                  <option value="Unit">Unit</option>
-                  <option value="Sets">Sets</option>
-                  <option value="Pcs">Pcs</option>
-                  <option value="Box">Box</option>
-                  <option value="Package">Package</option>
-                </select>
-              </div>
+              <CategoryDropdownField
+                label="UOM (Unit of Measure)"
+                categoryKey="unitsOfMeasure"
+                value={uom}
+                onChange={(val) => setUom(val)}
+                required
+              />
 
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -336,21 +318,13 @@ export const LiabilityModal: React.FC<LiabilityModalProps> = ({ record, onClose,
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                  Custody Status *
-                </label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as LiabilityStatus)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                >
-                  <option value="Active Accountability">Active Accountability</option>
-                  <option value="Surrendered">Surrendered</option>
-                  <option value="Transferred">Transferred</option>
-                  <option value="Lost/Damaged">Lost/Damaged</option>
-                </select>
-              </div>
+              <CategoryDropdownField
+                label="Custody Status"
+                categoryKey="liabilityStatuses"
+                value={status}
+                onChange={(val) => setStatus(val as LiabilityStatus)}
+                required
+              />
             </div>
 
             <div className="space-y-1">

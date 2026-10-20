@@ -16,14 +16,26 @@ interface MaintenanceViewProps {
 }
 
 export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ onOpenNewPM, onEditPM }) => {
-  const { preventiveMaintenance, deletePreventiveMaintenance, quickSearchQuery, currentUser } = useITM();
+  const { preventiveMaintenance, deletePreventiveMaintenance, quickSearchQuery, currentUser, dropdownOptions } = useITM();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+
+  const statuses = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.pmStatuses || []), ...preventiveMaintenance.map(pm => pm.status)].filter(Boolean)))
+  ], [dropdownOptions.pmStatuses, preventiveMaintenance]);
+
+  const departments = useMemo(() => [
+    'All',
+    ...Array.from(new Set([...(dropdownOptions.departments || []), ...preventiveMaintenance.map(pm => pm.department)].filter(Boolean)))
+  ], [dropdownOptions.departments, preventiveMaintenance]);
 
   const filtered = useMemo(() => {
     const q = (quickSearchQuery || search).trim().toLowerCase();
     return preventiveMaintenance.filter(pm => {
       if (statusFilter !== 'All' && pm.status !== statusFilter) return false;
+      if (departmentFilter !== 'All' && pm.department !== departmentFilter) return false;
       if (q) {
         const match = 
           pm.description.toLowerCase().includes(q) ||
@@ -129,15 +141,23 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ onOpenNewPM, o
           </div>
 
           <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            {departments.map((d) => (
+              <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>
+            ))}
+          </select>
+
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
-            <option value="All">All Statuses</option>
-            <option value="Completed">Completed</option>
-            <option value="Scheduled">Scheduled</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Requires Replacement">Requires Replacement</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
+            ))}
           </select>
         </div>
 
