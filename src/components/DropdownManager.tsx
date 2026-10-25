@@ -50,7 +50,25 @@ const CATEGORY_META: CategoryMetadata[] = [
     description: 'Corporate organizational divisions used across assets, tickets, onboarding, offboarding, loans, and liabilities.',
     icon: Building2,
     badgeColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-    example: 'e.g. Cloud Infrastructure, AI & Data, Cyber Security'
+    example: 'e.g. IT Infrastructure & Support, Engineering, Operations & Logistics'
+  },
+  {
+    key: 'branches',
+    label: 'Company Branches & Regional Sites',
+    singular: 'Branch',
+    description: 'Corporate branch locations (BASA, SMP, SJDM, Cebu, CDO, Tarlac, Bicol, HQ) for asset tracking and internet uptime KPI monitoring.',
+    icon: Building2,
+    badgeColor: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+    example: 'e.g. BASA Branch, Cebu Branch, CDO Branch, Bicol'
+  },
+  {
+    key: 'positions',
+    label: 'Job Titles & Designations',
+    singular: 'Position',
+    description: 'Corporate staff designations used in onboarding, offboarding, and equipment custody forms.',
+    icon: UserCheck,
+    badgeColor: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    example: 'e.g. IT Support Specialist, Network Engineer, Developer'
   },
   {
     key: 'assetCategories',

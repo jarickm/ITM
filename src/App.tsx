@@ -31,6 +31,7 @@ import { LiabilitiesView } from './views/LiabilitiesView';
 import { QRStudioView } from './views/QRStudioView';
 import { ActivityLogsView } from './views/ActivityLogsView';
 import { SettingsView } from './views/SettingsView';
+import { KPITargets2026View } from './views/KPITargets2026View';
 
 // Models
 import { 
@@ -257,6 +258,10 @@ const MainAppContent: React.FC = () => {
               onOpenNewRequest={() => handleOpenNewRequest('PR')}
               onOpenNewBorrow={handleOpenNewBorrow}
             />
+          )}
+
+          {activeTab === 'kpi_targets' && (
+            <KPITargets2026View />
           )}
 
           {activeTab === 'inventory' && (

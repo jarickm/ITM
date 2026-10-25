@@ -14,7 +14,8 @@ import {
   History, 
   Settings,
   Sliders,
-  ChevronRight
+  ChevronRight,
+  Target
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 
@@ -45,6 +46,14 @@ export const Sidebar: React.FC = () => {
       icon: LayoutDashboard,
       badge: null,
       color: 'text-indigo-600',
+    },
+    {
+      id: 'kpi_targets',
+      label: '🎯 Target & KPI 2026',
+      icon: Target,
+      badge: 'Official',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold',
+      color: 'text-emerald-600',
     },
     {
       id: 'inventory',

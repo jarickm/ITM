@@ -22,6 +22,8 @@ export type AssetCategory =
 
 export interface DropdownOptionsConfig {
   departments: string[];
+  branches: string[];
+  positions: string[];
   assetCategories: string[];
   assetStatuses: string[];
   requestTypes: string[];
@@ -207,3 +209,83 @@ export interface SystemSettings {
   lastBackupDate?: string;
   dropdownOptions?: DropdownOptionsConfig;
 }
+
+// ==========================================
+// OFFICIAL MEASUREMENT OF TARGET - IT 2026
+// ==========================================
+
+export type MonthName = 
+  | 'January' 
+  | 'February' 
+  | 'March' 
+  | 'April' 
+  | 'May' 
+  | 'June' 
+  | 'July' 
+  | 'August' 
+  | 'September' 
+  | 'October' 
+  | 'November' 
+  | 'December';
+
+export const MONTHS_LIST: MonthName[] = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+export interface MTTRMonthRecord {
+  daysSpent: number;
+  totalRepairs: number;
+}
+
+export interface BranchUptimeMonthRecord {
+  workingHours: number;
+  connectedHours: number;
+  noConnectionHours: number;
+  remarks?: string;
+}
+
+export interface OrientationMonthRecord {
+  conductedNetsuite: number;
+  scheduledNetsuite: number;
+  conductedBasic: number;
+  scheduledBasic: number;
+}
+
+export interface NetsuiteSlaMonthRecord {
+  minorResolvedDays: number;
+  minorReported: number;
+  majorResolvedDays: number;
+  majorReported: number;
+}
+
+export interface KPITargets2026Data {
+  year: number;
+  // KPI 1: Mean Time to Repair (MTTR)
+  mttr: {
+    minor: Record<MonthName, MTTRMonthRecord>;    // Target: Minor (<1 Day)
+    majorA: Record<MonthName, MTTRMonthRecord>;   // Target: Major A (<14 Days, <= 7 days)
+    majorB: Record<MonthName, MTTRMonthRecord>;   // Target: Major B (<30 Days, 14 days above)
+  };
+  // KPI 2: Percentage Uptime of Connectivity (Target: 100%)
+  connectivity: {
+    basa: Record<MonthName, BranchUptimeMonthRecord>;
+    smp: Record<MonthName, BranchUptimeMonthRecord>;
+    sjdm: Record<MonthName, BranchUptimeMonthRecord>;
+    cebu: Record<MonthName, BranchUptimeMonthRecord>;
+    cdo: Record<MonthName, BranchUptimeMonthRecord>;
+    tarlac: Record<MonthName, BranchUptimeMonthRecord>;
+    bicol: Record<MonthName, BranchUptimeMonthRecord>;
+  };
+  // KPI 3: Planned Maintenance Percentage (Target: 100% semi annual)
+  pms: {
+    firstHalf: { planned: number; actualDone: number };
+    secondHalf: { planned: number; actualDone: number };
+  };
+  // KPI 4: 10 for Orientation and Basic Troubleshooting
+  orientations: Record<MonthName, OrientationMonthRecord>;
+  // KPI 5: Percentage of NetSuite concerns resolved on time with IT (Target: 100%)
+  netsuite: Record<MonthName, NetsuiteSlaMonthRecord>;
+  updatedAt: string;
+}
+

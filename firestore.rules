@@ -60,6 +60,11 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    match /kpi_records/{kpiId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     match /test/{docId} {
       allow read, write: if isSignedIn();
     }

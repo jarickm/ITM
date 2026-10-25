@@ -21,7 +21,8 @@ import {
   SystemSettings,
   UserProfile,
   LanguageCode,
-  DropdownOptionsConfig 
+  DropdownOptionsConfig,
+  KPITargets2026Data 
 } from '../types/itm';
 import { 
   SEED_ASSETS, 
@@ -33,7 +34,8 @@ import {
   SEED_LIABILITIES, 
   SEED_ACTIVITY_LOGS, 
   INITIAL_SETTINGS,
-  DEFAULT_DROPDOWN_OPTIONS 
+  DEFAULT_DROPDOWN_OPTIONS,
+  SEED_KPI_2026 
 } from '../data/seedData';
 import { TRANSLATIONS } from '../utils/i18n';
 
@@ -65,6 +67,11 @@ interface ITMContextType {
   editDropdownOption: (categoryKey: keyof DropdownOptionsConfig, oldValue: string, newValue: string, updateExistingRecords?: boolean) => Promise<void>;
   deleteDropdownOption: (categoryKey: keyof DropdownOptionsConfig, value: string) => Promise<void>;
   resetDropdownCategoryToDefault: (categoryKey: keyof DropdownOptionsConfig) => Promise<void>;
+
+  // Official Measurement of Target - IT 2026
+  kpi2026: KPITargets2026Data;
+  updateKPI2026: (updates: Partial<KPITargets2026Data>) => Promise<void>;
+  resetKPI2026ToDefaults: () => Promise<void>;
 
   // CRUD Asset
   addAsset: (asset: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
@@ -209,6 +216,18 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return settings.dropdownOptions || DEFAULT_DROPDOWN_OPTIONS;
   });
 
+  const [kpi2026, setKpi2026] = useState<KPITargets2026Data>(() => {
+    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'kpi_2026');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        return SEED_KPI_2026;
+      }
+    }
+    return SEED_KPI_2026;
+  });
+
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     name: 'JM Montojo',
     email: 'jmmontojo2022@gmail.com',
@@ -224,6 +243,11 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedAssetForQR, setSelectedAssetForQR] = useState<Asset | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [alerts, setAlerts] = useState<AlertNotification[]>([]);
+
+  // Sync to local storage
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'kpi_2026', JSON.stringify(kpi2026));
+  }, [kpi2026]);
 
   // Sync to local storage
   useEffect(() => {
@@ -476,6 +500,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           handleFirestoreError(err, OperationType.GET, 'settings/global');
         });
         unsubs.push(settingsUnsub);
+
+        const kpiUnsub = onSnapshot(doc(db, 'kpi_records', '2026'), (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data() as KPITargets2026Data;
+            setKpi2026(data);
+          }
+        }, (err) => {
+          handleFirestoreError(err, OperationType.GET, 'kpi_records/2026');
+        });
+        unsubs.push(kpiUnsub);
       } catch (e) {
         console.warn('Real-time listener initialization notice:', e);
       }
@@ -1036,6 +1070,38 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // KPI 2026 TARGET MEASUREMENTS OPERATIONS
+  const updateKPI2026 = async (updates: Partial<KPITargets2026Data>) => {
+    const merged: KPITargets2026Data = {
+      ...kpi2026,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    setKpi2026(merged);
+    await logActivity('KPI_UPDATE', 'KPI2026', 'targets', 'Updated official IT 2026 Target Measurement records');
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'kpi_records', '2026'), merged, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'kpi_records/2026');
+      }
+    }
+  };
+
+  const resetKPI2026ToDefaults = async () => {
+    setKpi2026(SEED_KPI_2026);
+    await logActivity('KPI_RESET', 'KPI2026', 'targets', 'Reset IT 2026 Target Measurement records to official baseline');
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'kpi_records', '2026'), SEED_KPI_2026);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'kpi_records/2026');
+      }
+    }
+  };
+
   // 1-Click Seed Initial Data to Firebase
   const seedInitialDataToFirebase = async () => {
     if (!auth.currentUser) return;
@@ -1067,9 +1133,11 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Seed Dropdown Category Master Data
       await setDoc(doc(db, 'settings', 'dropdowns'), DEFAULT_DROPDOWN_OPTIONS);
       await setDoc(doc(db, 'settings', 'global'), INITIAL_SETTINGS);
+      // Seed Official Measurement of Target - IT 2026
+      await setDoc(doc(db, 'kpi_records', '2026'), SEED_KPI_2026);
 
       localStorage.removeItem(LOCAL_STORAGE_PREFIX + 'cleared');
-      await logActivity('DATABASE_SEED', 'System', 'all', 'Seeded initial enterprise dataset and dropdown categories to Firebase');
+      await logActivity('DATABASE_SEED', 'System', 'all', 'Seeded initial enterprise dataset, dropdown categories, and 2026 KPI targets to Firebase');
     } catch (err) {
       console.error('Seeding error:', err);
     }
@@ -1224,6 +1292,9 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         editDropdownOption,
         deleteDropdownOption,
         resetDropdownCategoryToDefault,
+        kpi2026,
+        updateKPI2026,
+        resetKPI2026ToDefaults,
         addAsset,
         updateAsset,
         deleteAsset,
