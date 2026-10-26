@@ -12,7 +12,9 @@ import {
   Square,
   RotateCcw,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Repeat,
+  Wrench
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 import { Asset, AssetCategory, AssetStatus } from '../types/itm';
@@ -21,12 +23,16 @@ interface InventoryViewProps {
   onOpenNewAsset: () => void;
   onEditAsset: (asset: Asset) => void;
   onPrintBatchQR: (assets: Asset[]) => void;
+  onOpenTransfer?: (asset: Asset) => void;
+  onOpenClearPasswordModal?: () => void;
 }
 
 export const InventoryView: React.FC<InventoryViewProps> = ({ 
   onOpenNewAsset, 
   onEditAsset,
-  onPrintBatchQR
+  onPrintBatchQR,
+  onOpenTransfer,
+  onOpenClearPasswordModal
 }) => {
   const { 
     assets, 
@@ -209,9 +215,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
           {canEdit && (
             <button
-              onClick={() => setShowClearModal(true)}
+              onClick={() => onOpenClearPasswordModal ? onOpenClearPasswordModal() : setShowClearModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-xs font-semibold text-rose-700 transition-colors shadow-xs"
-              title="Clear sample data to add your own company items"
+              title="Clear data protected by Master Admin Password"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Clear Data</span>
@@ -391,17 +397,25 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         {item.assetCode}
                       </td>
 
-                      {/* Status */}
+                      {/* Status & PMS */}
                       <td className="p-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          item.status === 'In Use' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          item.status === 'Available' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
-                          item.status === 'Defective' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                          item.status === 'Under Maintenance' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                          'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                          {item.status}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            item.status === 'In Use' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            item.status === 'Available' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
+                            item.status === 'Defective' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                            item.status === 'Under Maintenance' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {item.status}
+                          </span>
+                          {item.pmsCompleted && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <Wrench className="w-2.5 h-2.5 text-amber-600" />
+                              <span>PMS: {item.pmsHalf || 'Done'}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Department */}
@@ -423,6 +437,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         >
                           <QrCode className="w-3.5 h-3.5" />
                         </button>
+                        {onOpenTransfer && (
+                          <button
+                            onClick={() => onOpenTransfer(item)}
+                            className="p-1.5 rounded hover:bg-indigo-50 text-indigo-600 hover:text-indigo-800 transition-colors"
+                            title="Transfer Device / Reassign Custodian"
+                          >
+                            <Repeat className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {canEdit && (
                           <button
                             onClick={() => onEditAsset(item)}

@@ -7,7 +7,8 @@ import {
   Trash2, 
   Plus, 
   ShieldCheck, 
-  Clock 
+  Clock,
+  Repeat
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 import { OffboardingRecord } from '../types/itm';
@@ -15,11 +16,13 @@ import { OffboardingRecord } from '../types/itm';
 interface OffboardingViewProps {
   onOpenNewOffboarding: () => void;
   onEditOffboarding: (record: OffboardingRecord) => void;
+  onOpenTransferDevice?: (employeeName: string) => void;
 }
 
 export const OffboardingView: React.FC<OffboardingViewProps> = ({ 
   onOpenNewOffboarding, 
-  onEditOffboarding 
+  onEditOffboarding,
+  onOpenTransferDevice
 }) => {
   const { offboardings, deleteOffboarding, quickSearchQuery, currentUser, dropdownOptions } = useITM();
   const [search, setSearch] = useState('');
@@ -272,6 +275,16 @@ export const OffboardingView: React.FC<OffboardingViewProps> = ({
 
                     {/* Actions */}
                     <td className="p-3 text-right space-x-1">
+                      {onOpenTransferDevice && (
+                        <button
+                          onClick={() => onOpenTransferDevice(item.employeeName)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-[10px] border border-indigo-200 transition-colors"
+                          title="Transfer device from this employee to incoming replacement"
+                        >
+                          <Repeat className="w-3 h-3 text-indigo-600" />
+                          <span>Transfer Device</span>
+                        </button>
+                      )}
                       {canEdit && (
                         <button
                           onClick={() => onEditOffboarding(item)}

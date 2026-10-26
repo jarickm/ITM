@@ -20,9 +20,10 @@ import { UserRole, LanguageCode } from '../types/itm';
 
 interface NavbarProps {
   onOpenScanner: () => void;
+  onOpenClearModal?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal }) => {
   const { 
     currentUser, 
     setCurrentUser, 
@@ -287,10 +288,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
               </div>
 
               <div className="text-[10px] uppercase font-semibold text-slate-400 px-2 py-1">
-                Switch Role (RBAC Simulation)
+                User Permissions (Role Access)
               </div>
 
-              {(['Admin', 'IT Manager', 'IT Technician', 'Auditor'] as UserRole[]).map((role) => (
+              {(['Super Admin', 'IT Admin', 'Viewer / Staff'] as UserRole[]).map((role) => (
                 <button
                   key={role}
                   onClick={() => handleRoleChange(role)}
@@ -305,6 +306,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner }) => {
                   {currentUser.role === role && <span className="text-[10px] text-indigo-600 font-bold">Active</span>}
                 </button>
               ))}
+
+              {onOpenClearModal && currentUser.role === 'Super Admin' && (
+                <div className="pt-2 mt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => {
+                      setShowRoleDropdown(false);
+                      onOpenClearModal();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-rose-600 hover:bg-rose-50 text-left font-semibold text-xs transition-colors"
+                  >
+                    <span>🔒 Clear All Data (Master Password)</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

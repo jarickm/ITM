@@ -162,6 +162,7 @@ export const INITIAL_SETTINGS: SystemSettings = {
   alertEmail: 'jmmontojo2022@gmail.com',
   adDomain: 'CORP.APEXGLOBAL.INTERNAL',
   lastBackupDate: new Date().toISOString(),
+  masterAdminPassword: 'ITAdmin@2026',
   dropdownOptions: DEFAULT_DROPDOWN_OPTIONS,
 };
 
@@ -825,6 +826,16 @@ export const SEED_KPI_2026: KPITargets2026Data = {
   pms: {
     firstHalf: { planned: 161, actualDone: 161 },
     secondHalf: { planned: 161, actualDone: 161 },
+    locationTargets: {
+      'Head Office (Main HQ)': { planned: 45, actualDoneFirstHalf: 45, actualDoneSecondHalf: 45 },
+      'BASA Branch': { planned: 25, actualDoneFirstHalf: 25, actualDoneSecondHalf: 25 },
+      'SMP Branch': { planned: 20, actualDoneFirstHalf: 20, actualDoneSecondHalf: 20 },
+      'SJDM Branch': { planned: 18, actualDoneFirstHalf: 18, actualDoneSecondHalf: 18 },
+      'Cebu Branch': { planned: 20, actualDoneFirstHalf: 20, actualDoneSecondHalf: 20 },
+      'CDO (Cagayan de Oro) Branch': { planned: 15, actualDoneFirstHalf: 15, actualDoneSecondHalf: 15 },
+      'Tarlac Branch': { planned: 10, actualDoneFirstHalf: 10, actualDoneSecondHalf: 10 },
+      'Bicol Branch': { planned: 8, actualDoneFirstHalf: 8, actualDoneSecondHalf: 8 },
+    }
   },
   orientations: {
     January: { conductedNetsuite: 0, scheduledNetsuite: 0, conductedBasic: 0, scheduledBasic: 0 },
@@ -840,6 +851,44 @@ export const SEED_KPI_2026: KPITargets2026Data = {
     November: { conductedNetsuite: 0, scheduledNetsuite: 0, conductedBasic: 0, scheduledBasic: 0 },
     December: { conductedNetsuite: 0, scheduledNetsuite: 0, conductedBasic: 0, scheduledBasic: 0 },
   },
+  orientationSessions: [
+    {
+      id: 'ori-001',
+      date: '2026-05-14',
+      category: 'NetSuite System Training',
+      topic: 'NetSuite Purchase Requisition (PR) & Purchase Order (PO) Workflow',
+      branchOrDept: 'Head Office & Regional Branches',
+      attendeesCount: 18,
+      conductedBy: 'IT NetSuite Admin Team',
+      status: 'Conducted',
+      notes: 'Covered standard approval hierarchies and attachment rules.',
+      createdAt: '2026-05-14T08:00:00Z',
+    },
+    {
+      id: 'ori-002',
+      date: '2026-06-20',
+      category: 'Basic Troubleshooting',
+      topic: 'Office LAN Cable Re-crimping & Network Connectivity Quick Fixes',
+      branchOrDept: 'BASA Branch',
+      attendeesCount: 12,
+      conductedBy: 'Branch IT Support',
+      status: 'Conducted',
+      notes: 'Hands-on practice with RJ45 crimping and switch port rebooting.',
+      createdAt: '2026-06-20T08:00:00Z',
+    },
+    {
+      id: 'ori-003',
+      date: '2026-10-05',
+      category: 'NetSuite System Training',
+      topic: 'Year-End Inventory Reconciliation & Physical Count Posting in NetSuite',
+      branchOrDept: 'Warehouse & Accounting',
+      attendeesCount: 24,
+      conductedBy: 'ERP Systems Lead',
+      status: 'Conducted',
+      notes: 'Reviewed stock variance adjustments and batch upload procedures.',
+      createdAt: '2026-10-05T08:00:00Z',
+    }
+  ],
   netsuite: {
     January: { minorResolvedDays: 5, minorReported: 5, majorResolvedDays: 0, majorReported: 0 },
     February: { minorResolvedDays: 17, minorReported: 17, majorResolvedDays: 0, majorReported: 0 },
@@ -854,6 +903,38 @@ export const SEED_KPI_2026: KPITargets2026Data = {
     November: { minorResolvedDays: 0, minorReported: 0, majorResolvedDays: 0, majorReported: 0 },
     December: { minorResolvedDays: 0, minorReported: 0, majorResolvedDays: 0, majorReported: 0 },
   },
+  netsuiteConcerns: [
+    {
+      id: 'ns-001',
+      ticketNumber: 'NS-2026-0104',
+      dateReported: '2026-06-11',
+      dateResolved: '2026-06-12',
+      requester: 'Maria Santos',
+      departmentOrBranch: 'Finance & Accounting',
+      moduleOrFunction: 'User Login / Two-Factor Authentication Lockout',
+      priority: 'Minor (<1 Day)',
+      description: 'Account locked out after 3 failed password attempts on mobile authenticator.',
+      resolutionNotes: 'Reset password and 2FA seed key in NetSuite Admin console within 2 hours.',
+      daysToResolve: 0.2,
+      resolvedOnTime: true,
+      createdAt: '2026-06-11T09:00:00Z',
+    },
+    {
+      id: 'ns-002',
+      ticketNumber: 'NS-2026-0219',
+      dateReported: '2026-08-03',
+      dateResolved: '2026-08-05',
+      requester: 'Carlos Reyes',
+      departmentOrBranch: 'Operations & Logistics',
+      moduleOrFunction: 'Sales Order Scripting Error & PDF Invoice Form Customization',
+      priority: 'Major (<=7 Days)',
+      description: 'Custom SuiteScript trigger failed on international VAT recalculation and print template.',
+      resolutionNotes: 'Debugged UserEvent script and adjusted XML template styling. Resolved in 2 days.',
+      daysToResolve: 2,
+      resolvedOnTime: true,
+      createdAt: '2026-08-03T10:30:00Z',
+    }
+  ],
   updatedAt: new Date().toISOString(),
 };
 

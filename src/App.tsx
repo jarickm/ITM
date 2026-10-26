@@ -16,6 +16,9 @@ import { RequestModal } from './components/RequestModal';
 import { BorrowModal } from './components/BorrowModal';
 import { MaintenanceModal } from './components/MaintenanceModal';
 import { LiabilityModal } from './components/LiabilityModal';
+import { ClearDataModal } from './components/ClearDataModal';
+import { AssetTransferModal } from './components/AssetTransferModal';
+import { ITCompanionAI } from './components/ITCompanionAI';
 
 // Views
 import { DashboardView } from './views/DashboardView';
@@ -48,6 +51,7 @@ import {
 const MainAppContent: React.FC = () => {
   const { 
     activeTab, 
+    assets,
     selectedAssetForQR, 
     setSelectedAssetForQR,
     addAsset,
@@ -98,6 +102,31 @@ const MainAppContent: React.FC = () => {
   // Liability Modal
   const [showLiabilityModal, setShowLiabilityModal] = useState(false);
   const [editingLiability, setEditingLiability] = useState<LiabilityRecord | null>(null);
+
+  // Clear Data Modal (Password protected)
+  const [showClearDataModal, setShowClearDataModal] = useState(false);
+
+  // Device Custody Transfer Modal
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTargetAsset, setTransferTargetAsset] = useState<Asset | null>(null);
+  const [transferFromEmployee, setTransferFromEmployee] = useState<string | undefined>(undefined);
+
+  const handleOpenTransfer = (assetOrEmployee?: Asset | string) => {
+    if (typeof assetOrEmployee === 'string') {
+      const foundAsset = assets.find(a => 
+        a.employeeOrDeviceName.toLowerCase().includes(assetOrEmployee.toLowerCase())
+      );
+      setTransferTargetAsset(foundAsset || null);
+      setTransferFromEmployee(assetOrEmployee);
+    } else if (assetOrEmployee) {
+      setTransferTargetAsset(assetOrEmployee);
+      setTransferFromEmployee(assetOrEmployee.employeeOrDeviceName);
+    } else {
+      setTransferTargetAsset(null);
+      setTransferFromEmployee(undefined);
+    }
+    setShowTransferModal(true);
+  };
 
   // Asset handlers
   const handleOpenNewAsset = () => {
@@ -242,7 +271,10 @@ const MainAppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
       {/* Top Navbar */}
-      <Navbar onOpenScanner={() => setShowScanner(true)} />
+      <Navbar 
+        onOpenScanner={() => setShowScanner(true)} 
+        onOpenClearModal={() => setShowClearDataModal(true)} 
+      />
 
       {/* Main Body */}
       <div className="flex-1 flex overflow-hidden">
@@ -269,6 +301,8 @@ const MainAppContent: React.FC = () => {
               onOpenNewAsset={handleOpenNewAsset}
               onEditAsset={handleEditAsset}
               onPrintBatchQR={handlePrintBatchQR}
+              onOpenTransfer={handleOpenTransfer}
+              onOpenClearPasswordModal={() => setShowClearDataModal(true)}
             />
           )}
 
@@ -289,6 +323,7 @@ const MainAppContent: React.FC = () => {
             <OffboardingView
               onOpenNewOffboarding={handleOpenNewOffboarding}
               onEditOffboarding={handleEditOffboarding}
+              onOpenTransferDevice={handleOpenTransfer}
             />
           )}
 
@@ -444,6 +479,27 @@ const MainAppContent: React.FC = () => {
           onSave={handleSaveLiability}
         />
       )}
+
+      {/* Master Password Protected Clear Data Modal */}
+      {showClearDataModal && (
+        <ClearDataModal onClose={() => setShowClearDataModal(false)} />
+      )}
+
+      {/* Device Custody Transfer & Handover Slip Modal */}
+      {showTransferModal && (
+        <AssetTransferModal
+          initialAsset={transferTargetAsset || undefined}
+          initialFromEmployee={transferFromEmployee}
+          onClose={() => {
+            setShowTransferModal(false);
+            setTransferTargetAsset(null);
+            setTransferFromEmployee(undefined);
+          }}
+        />
+      )}
+
+      {/* Google Workspace & IT AI Companion */}
+      <ITCompanionAI />
     </div>
   );
 };

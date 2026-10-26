@@ -20,9 +20,14 @@ import {
   ActivityLog,
   SystemSettings,
   UserProfile,
+  UserRole,
   LanguageCode,
   DropdownOptionsConfig,
-  KPITargets2026Data 
+  KPITargets2026Data,
+  AssetCustodyTransfer,
+  OrientationSessionLog,
+  NetsuiteConcernLog,
+  MONTHS_LIST
 } from '../types/itm';
 import { 
   SEED_ASSETS, 
@@ -72,11 +77,18 @@ interface ITMContextType {
   kpi2026: KPITargets2026Data;
   updateKPI2026: (updates: Partial<KPITargets2026Data>) => Promise<void>;
   resetKPI2026ToDefaults: () => Promise<void>;
+  autoSyncKPIFromSystem: () => Promise<KPITargets2026Data>;
+  addOrientationSession: (session: Omit<OrientationSessionLog, 'id' | 'createdAt'>) => Promise<void>;
+  deleteOrientationSession: (id: string) => Promise<void>;
+  addNetsuiteConcern: (concern: Omit<NetsuiteConcernLog, 'id' | 'createdAt'>) => Promise<void>;
+  deleteNetsuiteConcern: (id: string) => Promise<void>;
 
-  // CRUD Asset
+  // CRUD Asset & Custody Transfer
   addAsset: (asset: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
+  transferAsset: (transferData: AssetCustodyTransfer) => Promise<void>;
+  markAssetPMSDone: (assetId: string, pmsHalf: '1st Half' | '2nd Half' | 'Both', technician: string, remarks?: string) => Promise<void>;
 
   // CRUD Onboarding
   addOnboarding: (rec: Omit<OnboardingRecord, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
@@ -116,12 +128,14 @@ interface ITMContextType {
   seedInitialDataToFirebase: () => Promise<void>;
   clearAllData: () => Promise<void>;
   clearAssetsOnly: () => Promise<void>;
+  clearDataWithPassword: (password: string, clearScope: 'all' | 'assets' | 'requests' | 'borrowings') => Promise<{ success: boolean; message: string }>;
   createBackupSnapshot: () => void;
   restoreBackupSnapshot: (jsonData: string) => Promise<void>;
 
   // Auth & Roles
   currentUser: UserProfile;
   setCurrentUser: (user: UserProfile) => void;
+  setUserRole: (role: UserRole) => void;
   language: LanguageCode;
   setLanguage: (lang: LanguageCode) => void;
   t: (key: string) => string;
@@ -600,6 +614,58 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `assets/${id}`);
       }
+    }
+  };
+
+  // ASSET CUSTODY TRANSFER & TURNOVER (GUI SUPPORT FOR EMPLOYEE RESIGNATION/TRANSFER)
+  const transferAsset = async (transferData: AssetCustodyTransfer) => {
+    const targetAsset = assets.find(a => a.id === transferData.id || a.assetCode === transferData.id);
+    if (!targetAsset) return;
+
+    const existingHistory = targetAsset.custodyHistory || [];
+    const updatedHistory = [transferData, ...existingHistory];
+
+    const updates: Partial<Asset> = {
+      employeeOrDeviceName: transferData.toEmployee,
+      department: transferData.toDepartment,
+      location: transferData.toBranch || targetAsset.location,
+      status: transferData.reason === 'Return to IT Stock' ? 'Available' : 'In Use',
+      custodyHistory: updatedHistory,
+      notes: `${targetAsset.notes || ''}\n[${transferData.transferDate}] Transferred from ${transferData.fromEmployee} to ${transferData.toEmployee} (${transferData.reason}). Slip: ${transferData.turnoverReceiptNumber}`.trim(),
+    };
+
+    await updateAsset(targetAsset.id, updates);
+    await logActivity(
+      'ASSET_CUSTODY_TRANSFER',
+      'Asset',
+      targetAsset.assetCode,
+      `Device ${targetAsset.assetCode} transferred from ${transferData.fromEmployee} (${transferData.fromDepartment}) to ${transferData.toEmployee} (${transferData.toDepartment}). Reason: ${transferData.reason}. Turnover Slip #${transferData.turnoverReceiptNumber}`
+    );
+  };
+
+  // MARK ASSET PMS DONE
+  const markAssetPMSDone = async (assetId: string, pmsHalf: '1st Half' | '2nd Half' | 'Both', technician: string, remarks?: string) => {
+    const today = new Date().toISOString().substring(0, 10);
+    await updateAsset(assetId, {
+      pmsCompleted: true,
+      pmsDate: today,
+      pmsHalf,
+      pmsTechnician: technician,
+      pmsRemarks: remarks || 'Semi-annual inspection and diagnostics completed.',
+    });
+    const asset = assets.find(a => a.id === assetId);
+    if (asset) {
+      await addPreventiveMaintenance({
+        description: `PMS Inspection (${pmsHalf}) - ${asset.employeeOrDeviceName}`,
+        date: today,
+        datePurchase: asset.purchaseDate || today,
+        assetCode: asset.assetCode,
+        activityWorkDone: `Completed thermal clean, diagnostic health test, memory check, and OS updates. ${remarks || ''}`.trim(),
+        performedBy: technician,
+        status: 'Completed',
+        recommendation: 'Unit in good operational state. Keep in service.',
+        department: asset.department,
+      });
     }
   };
 
@@ -1206,6 +1272,172 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('ASSETS_CLEARED', 'Asset', 'all', 'All inventory asset records cleared');
   };
 
+  // SECURE CLEAR ALL DATA WITH MASTER PASSWORD PROTECTION
+  const clearDataWithPassword = async (
+    password: string, 
+    clearScope: 'all' | 'assets' | 'requests' | 'borrowings'
+  ): Promise<{ success: boolean; message: string }> => {
+    const expectedPassword = settings.masterAdminPassword || 'ITAdmin@2026';
+    if (password !== expectedPassword) {
+      return { success: false, message: 'Invalid IT Admin Master Password. Access denied.' };
+    }
+
+    if (clearScope === 'all') {
+      await clearAllData();
+      return { success: true, message: 'All system records and inventory data wiped successfully.' };
+    } else if (clearScope === 'assets') {
+      await clearAssetsOnly();
+      return { success: true, message: 'All inventory asset records cleared.' };
+    } else if (clearScope === 'requests') {
+      setRequests([]);
+      localStorage.setItem(LOCAL_STORAGE_PREFIX + 'requests', JSON.stringify([]));
+      if (auth.currentUser) {
+        try {
+          const snap = await getDocs(collection(db, 'requests'));
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'requests', d.id))));
+        } catch (e) { console.warn(e); }
+      }
+      return { success: true, message: 'All PR and incident request records cleared.' };
+    } else if (clearScope === 'borrowings') {
+      setBorrowings([]);
+      localStorage.setItem(LOCAL_STORAGE_PREFIX + 'borrowings', JSON.stringify([]));
+      if (auth.currentUser) {
+        try {
+          const snap = await getDocs(collection(db, 'borrowings'));
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'borrowings', d.id))));
+        } catch (e) { console.warn(e); }
+      }
+      return { success: true, message: 'All borrowing records cleared.' };
+    }
+    return { success: false, message: 'Unknown clear scope.' };
+  };
+
+  // ROLE & USER PERMISSIONS
+  const setUserRole = (role: UserRole) => {
+    setCurrentUser(prev => ({ ...prev, role }));
+  };
+
+  // AUTO-CALCULATE & SYNC KPI DATA FROM LIVE SYSTEM (PMS, REPAIRS, NETSUITE)
+  const autoSyncKPIFromSystem = async (): Promise<KPITargets2026Data> => {
+    // 1. Calculate PMS completed from assets
+    const pmsDoneFirstHalf = assets.filter(a => a.pmsCompleted && (a.pmsHalf === '1st Half' || a.pmsHalf === 'Both')).length;
+    const pmsDoneSecondHalf = assets.filter(a => a.pmsCompleted && (a.pmsHalf === '2nd Half' || a.pmsHalf === 'Both')).length;
+
+    // 2. Location-based breakdown for PMS
+    const locationTargets: Record<string, { planned: number; actualDoneFirstHalf: number; actualDoneSecondHalf: number }> = {
+      ...(kpi2026.pms.locationTargets || {})
+    };
+    (dropdownOptions.branches || []).forEach(branch => {
+      const branchAssets = assets.filter(a => 
+        (a.location && a.location.toLowerCase().includes(branch.toLowerCase())) ||
+        (a.department && a.department.toLowerCase().includes(branch.toLowerCase()))
+      );
+      const firstHalfDone = branchAssets.filter(a => a.pmsCompleted && (a.pmsHalf === '1st Half' || a.pmsHalf === 'Both')).length;
+      const secondHalfDone = branchAssets.filter(a => a.pmsCompleted && (a.pmsHalf === '2nd Half' || a.pmsHalf === 'Both')).length;
+      if (!locationTargets[branch]) {
+        locationTargets[branch] = { 
+          planned: Math.max(10, branchAssets.length || 15), 
+          actualDoneFirstHalf: firstHalfDone, 
+          actualDoneSecondHalf: secondHalfDone 
+        };
+      } else {
+        locationTargets[branch].actualDoneFirstHalf = firstHalfDone > 0 ? firstHalfDone : locationTargets[branch].actualDoneFirstHalf;
+        locationTargets[branch].actualDoneSecondHalf = secondHalfDone > 0 ? secondHalfDone : locationTargets[branch].actualDoneSecondHalf;
+      }
+    });
+
+    const updated: KPITargets2026Data = {
+      ...kpi2026,
+      pms: {
+        firstHalf: {
+          planned: kpi2026.pms.firstHalf.planned || 161,
+          actualDone: pmsDoneFirstHalf > 0 ? pmsDoneFirstHalf : kpi2026.pms.firstHalf.actualDone,
+        },
+        secondHalf: {
+          planned: kpi2026.pms.secondHalf.planned || 161,
+          actualDone: pmsDoneSecondHalf > 0 ? pmsDoneSecondHalf : kpi2026.pms.secondHalf.actualDone,
+        },
+        locationTargets,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+
+    await updateKPI2026(updated);
+    return updated;
+  };
+
+  // ADD & DELETE ORIENTATION SESSIONS
+  const addOrientationSession = async (session: Omit<OrientationSessionLog, 'id' | 'createdAt'>) => {
+    const id = `ori-${Date.now()}`;
+    const newSession: OrientationSessionLog = { ...session, id, createdAt: new Date().toISOString() };
+    const currentSessions = kpi2026.orientationSessions || [];
+    const updatedSessions = [newSession, ...currentSessions];
+
+    const dateObj = new Date(session.date);
+    const monthIndex = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
+    const monthName = MONTHS_LIST[monthIndex] || 'January';
+
+    const currentMonthData = kpi2026.orientations[monthName] || { conductedNetsuite: 0, scheduledNetsuite: 0, conductedBasic: 0, scheduledBasic: 0 };
+    const isNetsuite = session.category === 'NetSuite System Training';
+    const updatedMonthData = {
+      ...currentMonthData,
+      conductedNetsuite: isNetsuite && session.status === 'Conducted' ? currentMonthData.conductedNetsuite + 1 : currentMonthData.conductedNetsuite,
+      scheduledNetsuite: isNetsuite ? currentMonthData.scheduledNetsuite + 1 : currentMonthData.scheduledNetsuite,
+      conductedBasic: !isNetsuite && session.status === 'Conducted' ? currentMonthData.conductedBasic + 1 : currentMonthData.conductedBasic,
+      scheduledBasic: !isNetsuite ? currentMonthData.scheduledBasic + 1 : currentMonthData.scheduledBasic,
+    };
+
+    const updatedKPI: Partial<KPITargets2026Data> = {
+      orientationSessions: updatedSessions,
+      orientations: {
+        ...kpi2026.orientations,
+        [monthName]: updatedMonthData,
+      }
+    };
+    await updateKPI2026(updatedKPI);
+  };
+
+  const deleteOrientationSession = async (id: string) => {
+    const updatedSessions = (kpi2026.orientationSessions || []).filter(s => s.id !== id);
+    await updateKPI2026({ orientationSessions: updatedSessions });
+  };
+
+  // ADD & DELETE NETSUITE CONCERNS WITH SCREENSHOT SUPPORT
+  const addNetsuiteConcern = async (concern: Omit<NetsuiteConcernLog, 'id' | 'createdAt'>) => {
+    const id = `ns-${Date.now()}`;
+    const newConcern: NetsuiteConcernLog = { ...concern, id, createdAt: new Date().toISOString() };
+    const currentConcerns = kpi2026.netsuiteConcerns || [];
+    const updatedConcerns = [newConcern, ...currentConcerns];
+
+    const dateObj = new Date(concern.dateReported);
+    const monthIndex = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
+    const monthName = MONTHS_LIST[monthIndex] || 'January';
+
+    const currentMonthData = kpi2026.netsuite[monthName] || { minorResolvedDays: 0, minorReported: 0, majorResolvedDays: 0, majorReported: 0 };
+    const isMinor = concern.priority.includes('Minor');
+    const updatedMonthData = {
+      ...currentMonthData,
+      minorReported: isMinor ? currentMonthData.minorReported + 1 : currentMonthData.minorReported,
+      minorResolvedDays: isMinor && concern.resolvedOnTime ? currentMonthData.minorResolvedDays + Number(concern.daysToResolve || 1) : currentMonthData.minorResolvedDays,
+      majorReported: !isMinor ? currentMonthData.majorReported + 1 : currentMonthData.majorReported,
+      majorResolvedDays: !isMinor && concern.resolvedOnTime ? currentMonthData.majorResolvedDays + Number(concern.daysToResolve || 1) : currentMonthData.majorResolvedDays,
+    };
+
+    const updatedKPI: Partial<KPITargets2026Data> = {
+      netsuiteConcerns: updatedConcerns,
+      netsuite: {
+        ...kpi2026.netsuite,
+        [monthName]: updatedMonthData,
+      }
+    };
+    await updateKPI2026(updatedKPI);
+  };
+
+  const deleteNetsuiteConcern = async (id: string) => {
+    const updatedConcerns = (kpi2026.netsuiteConcerns || []).filter(c => c.id !== id);
+    await updateKPI2026({ netsuiteConcerns: updatedConcerns });
+  };
+
   // Backup snapshots
   const createBackupSnapshot = () => {
     const snapshot = {
@@ -1295,9 +1527,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         kpi2026,
         updateKPI2026,
         resetKPI2026ToDefaults,
+        autoSyncKPIFromSystem,
+        addOrientationSession,
+        deleteOrientationSession,
+        addNetsuiteConcern,
+        deleteNetsuiteConcern,
         addAsset,
         updateAsset,
         deleteAsset,
+        transferAsset,
+        markAssetPMSDone,
         addOnboarding,
         updateOnboarding,
         deleteOnboarding,
@@ -1321,10 +1560,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         seedInitialDataToFirebase,
         clearAllData,
         clearAssetsOnly,
+        clearDataWithPassword,
         createBackupSnapshot,
         restoreBackupSnapshot,
         currentUser,
         setCurrentUser,
+        setUserRole,
         language,
         setLanguage,
         t,

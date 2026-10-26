@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Layers, Save, AlertTriangle } from 'lucide-react';
+import { X, Layers, Save, AlertTriangle, Wrench } from 'lucide-react';
 import { Asset, AssetCategory, AssetStatus } from '../types/itm';
 import { CategoryDropdownField } from './CategoryDropdownField';
 import { useITM } from '../context/ITMContext';
@@ -27,6 +27,12 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
   const [defectiveDetails, setDefectiveDetails] = useState(asset?.defectiveDetails || '');
   const [repairVendor, setRepairVendor] = useState(asset?.repairVendor || '');
   const [rmaNumber, setRmaNumber] = useState(asset?.rmaNumber || '');
+  // PMS fields
+  const [pmsCompleted, setPmsCompleted] = useState(asset?.pmsCompleted || false);
+  const [pmsDate, setPmsDate] = useState(asset?.pmsDate || new Date().toISOString().substring(0, 10));
+  const [pmsHalf, setPmsHalf] = useState<'1st Half' | '2nd Half' | 'Both'>(asset?.pmsHalf || '1st Half');
+  const [pmsTechnician, setPmsTechnician] = useState(asset?.pmsTechnician || '');
+  const [pmsRemarks, setPmsRemarks] = useState(asset?.pmsRemarks || '');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -76,6 +82,11 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
         defectiveDetails: isDefective ? defectiveDetails : undefined,
         repairVendor: isDefective ? repairVendor : undefined,
         rmaNumber: isDefective ? rmaNumber : undefined,
+        pmsCompleted,
+        pmsDate: pmsCompleted ? pmsDate : undefined,
+        pmsHalf: pmsCompleted ? pmsHalf : undefined,
+        pmsTechnician: pmsCompleted ? pmsTechnician : undefined,
+        pmsRemarks: pmsCompleted ? pmsRemarks : undefined,
       });
       onClose();
     } catch (err) {
@@ -251,6 +262,65 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
               placeholder="Hardware details, assigned accessories, special software configuration..."
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
+          </div>
+
+          {/* Planned Maintenance (PMS) Alignment Section */}
+          <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pmsCompleted}
+                  onChange={(e) => setPmsCompleted(e.target.checked)}
+                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                  <Wrench className="w-3.5 h-3.5 text-amber-600" />
+                  Planned Maintenance (PMS) Completed
+                </span>
+              </label>
+              {pmsCompleted && (
+                <span className="text-[10px] text-amber-800 font-bold bg-white px-2 py-0.5 rounded border border-amber-200">
+                  Counted in 2026 KPI Target (161 Devices)
+                </span>
+              )}
+            </div>
+
+            {pmsCompleted && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-amber-200 text-xs">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">PMS Half Period</label>
+                  <select
+                    value={pmsHalf}
+                    onChange={(e) => setPmsHalf(e.target.value as any)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-semibold focus:outline-none"
+                  >
+                    <option value="1st Half">1st Half Planned</option>
+                    <option value="2nd Half">2nd Half Planned</option>
+                    <option value="Both">Both 1st & 2nd Half</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">Date Maintained</label>
+                  <input
+                    type="date"
+                    value={pmsDate}
+                    onChange={(e) => setPmsDate(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">Inspector / Tech</label>
+                  <input
+                    type="text"
+                    value={pmsTechnician}
+                    onChange={(e) => setPmsTechnician(e.target.value)}
+                    placeholder="e.g. IT Helpdesk"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Defective & RMA Section */}

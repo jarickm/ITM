@@ -57,9 +57,35 @@ export interface Asset {
   rmaNumber?: string;
   qrCodeData?: string;
   imageUrl?: string;
+  // Planned Maintenance (PMS) alignment
+  pmsCompleted?: boolean;
+  pmsDate?: string;
+  pmsHalf?: '1st Half' | '2nd Half' | 'Both';
+  pmsTechnician?: string;
+  pmsRemarks?: string;
+  // Custody Transfer History / Ownership Trail
+  custodyHistory?: AssetCustodyTransfer[];
   notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AssetCustodyTransfer {
+  id: string;
+  transferDate: string;
+  fromEmployee: string;
+  fromDepartment: string;
+  fromBranch?: string;
+  toEmployee: string;
+  toDepartment: string;
+  toBranch?: string;
+  reason: 'Employee Resigned' | 'Department Transfer' | 'Position Reassignment' | 'Temporary Reallocation' | 'Return to IT Stock' | string;
+  conditionOnTransfer: string;
+  accessoriesIncluded: string[]; // e.g. ['Charger / Adapter', 'Mouse', 'Laptop Bag', 'Cable Lock', 'USB Dongle / Hub']
+  transferNotes?: string;
+  authorizedBy: string;
+  turnoverReceiptNumber: string;
+  receivedAcknowledged?: boolean;
 }
 
 export type OnboardingStatus = 'Pending' | 'Equipment Assigned' | 'Completed' | 'Delayed' | (string & {});
@@ -187,7 +213,7 @@ export interface ActivityLog {
   details: string;
 }
 
-export type UserRole = 'Admin' | 'IT Manager' | 'IT Technician' | 'Auditor';
+export type UserRole = 'Super Admin' | 'IT Admin' | 'Viewer / Staff' | 'Admin' | 'IT Manager' | 'IT Technician' | 'Auditor';
 
 export interface UserProfile {
   name: string;
@@ -207,6 +233,7 @@ export interface SystemSettings {
   alertEmail: string;
   adDomain: string;
   lastBackupDate?: string;
+  masterAdminPassword?: string; // IT Admin Password for Clear All Data & Critical Actions
   dropdownOptions?: DropdownOptionsConfig;
 }
 
@@ -252,11 +279,42 @@ export interface OrientationMonthRecord {
   scheduledBasic: number;
 }
 
+export interface OrientationSessionLog {
+  id: string;
+  date: string;
+  category: 'NetSuite System Training' | 'Basic Troubleshooting';
+  topic: string;
+  branchOrDept: string;
+  attendeesCount: number;
+  conductedBy: string;
+  status: 'Conducted' | 'Scheduled';
+  notes?: string;
+  createdAt: string;
+}
+
 export interface NetsuiteSlaMonthRecord {
   minorResolvedDays: number;
   minorReported: number;
   majorResolvedDays: number;
   majorReported: number;
+}
+
+export interface NetsuiteConcernLog {
+  id: string;
+  ticketNumber: string;
+  dateReported: string;
+  dateResolved?: string;
+  requester: string;
+  departmentOrBranch: string;
+  moduleOrFunction: string;
+  priority: 'Minor (<1 Day)' | 'Major (<=7 Days)';
+  description: string;
+  resolutionNotes?: string;
+  daysToResolve: number;
+  resolvedOnTime: boolean;
+  screenshotUrl?: string; // base64 image or URL
+  screenshotFileName?: string;
+  createdAt: string;
 }
 
 export interface KPITargets2026Data {
@@ -281,11 +339,14 @@ export interface KPITargets2026Data {
   pms: {
     firstHalf: { planned: number; actualDone: number };
     secondHalf: { planned: number; actualDone: number };
+    locationTargets?: Record<string, { planned: number; actualDoneFirstHalf: number; actualDoneSecondHalf: number }>;
   };
   // KPI 4: 10 for Orientation and Basic Troubleshooting
   orientations: Record<MonthName, OrientationMonthRecord>;
+  orientationSessions?: OrientationSessionLog[];
   // KPI 5: Percentage of NetSuite concerns resolved on time with IT (Target: 100%)
   netsuite: Record<MonthName, NetsuiteSlaMonthRecord>;
+  netsuiteConcerns?: NetsuiteConcernLog[];
   updatedAt: string;
 }
 
