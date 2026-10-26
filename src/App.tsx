@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { Cloud, RefreshCw } from 'lucide-react';
 import { ITMProvider, useITM } from './context/ITMContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -44,7 +45,7 @@ import {
   RequestRecord, 
   BorrowingRecord, 
   PreventiveMaintenanceRecord, 
-  LiabilityRecord,
+  LiabilityRecord, 
   RequestType 
 } from './types/itm';
 
@@ -67,7 +68,9 @@ const MainAppContent: React.FC = () => {
     addPreventiveMaintenance,
     updatePreventiveMaintenance,
     addLiability,
-    updateLiability
+    updateLiability,
+    isCloudLoading,
+    cloudDatabaseId
   } = useITM();
 
   // Modals state
@@ -267,6 +270,32 @@ const MainAppContent: React.FC = () => {
   const handlePrintBatchQR = (assetsList: Asset[]) => {
     setBatchPrintAssets(assetsList);
   };
+
+  if (isCloudLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white text-center select-none">
+        <div className="relative mb-6">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-indigo-700 flex items-center justify-center shadow-xl shadow-indigo-500/25 animate-pulse">
+            <Cloud className="w-8 h-8 text-white" />
+          </div>
+          <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900 animate-ping" />
+        </div>
+        <h2 className="text-xl font-bold tracking-tight text-white mb-1.5 flex items-center gap-2">
+          <span>Connecting to Cloud Firestore</span>
+        </h2>
+        <p className="text-xs text-indigo-300 font-mono mb-4 bg-indigo-950/70 border border-indigo-800/60 px-3 py-1 rounded-full">
+          {cloudDatabaseId}
+        </p>
+        <p className="text-xs text-slate-400 max-w-sm mb-6 leading-relaxed">
+          Establishing real-time cloud snapshot streams. All enterprise assets, maintenance history, and 2026 KPI targets are loaded directly from Google Cloud Firestore.
+        </p>
+        <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-3.5 py-1.5 rounded-lg">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+          <span>Synchronizing live database...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">

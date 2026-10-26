@@ -13,7 +13,8 @@ import {
   Clock, 
   X,
   Database,
-  UserCheck
+  UserCheck,
+  Cloud
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 import { UserRole, LanguageCode } from '../types/itm';
@@ -32,6 +33,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
     t, 
     isOnline, 
     isFirebaseConnected,
+    isCloudLoading,
+    cloudDatabaseId,
     alerts,
     markAlertRead,
     clearAllAlerts,
@@ -120,31 +123,26 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
           <span className="hidden md:inline">{t('quickScan')}</span>
         </button>
 
-        {/* Sync / Firebase Status */}
-        <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-[11px] text-slate-700">
-          {isOnline ? (
-            <span className="flex items-center gap-1.5 text-emerald-700 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <Wifi className="w-3 h-3 text-emerald-600" />
-              <span>{isFirebaseConnected ? 'Cloud Active' : 'Online'}</span>
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-amber-700 font-medium">
-              <WifiOff className="w-3 h-3 text-amber-600" />
-              <span>Offline Cache</span>
-            </span>
-          )}
+        {/* Authoritative Cloud Database Status */}
+        <div 
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 font-semibold shadow-2xs"
+          title={`100% Cloud Database: Google Cloud Firestore (${cloudDatabaseId}). Real-time live replication across all devices and sessions. No local database.`}
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Cloud Database: {isFirebaseConnected ? 'Connected' : 'Connecting...'}</span>
+          <span className="hidden xl:inline text-[10px] text-emerald-600 font-mono font-normal">Firestore</span>
         </div>
 
-        {/* Firebase Quick Seed Button */}
+        {/* Cloud Database Re-Seed Button */}
         <button
           onClick={handleSeedFirebase}
           disabled={isSeeding}
           className="hidden xl:flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[11px] text-slate-700 font-medium transition-colors"
-          title="Sync demo dataset to Firebase Firestore"
+          title="Re-populate cloud Firestore collections with enterprise baseline records"
         >
           <Database className="w-3 h-3 text-indigo-600" />
-          <span>{isSeeding ? 'Syncing...' : 'Sync to Cloud'}</span>
+          <span>{isSeeding ? 'Syncing...' : 'Seed Cloud DB'}</span>
         </button>
 
         {/* Notification Bell Dropdown */}

@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Trash2,
   AlertTriangle,
-  Sliders
+  Sliders,
+  Cloud
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 import { DropdownManager } from '../components/DropdownManager';
@@ -32,7 +33,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'dropdo
     seedInitialDataToFirebase, 
     clearAllData,
     clearAssetsOnly,
-    isFirebaseConnected 
+    isFirebaseConnected,
+    cloudDatabaseId
   } = useITM();
 
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(initialTab);
@@ -411,17 +413,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'dropdo
             </div>
           </div>
 
-          {/* Sync to Firebase Firestore */}
-          <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div>
+          {/* Cloud Firestore Central Database Card */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50/80 via-slate-50 to-emerald-50/50 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+            <div className="space-y-1">
               <div className="font-bold text-slate-900 flex items-center gap-2">
-                <span>Firebase Firestore Cloud Synchronization</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {isFirebaseConnected ? 'Connected' : 'Active'}
+                <Cloud className="w-4 h-4 text-indigo-600" />
+                <span>Authoritative Database: Google Cloud Firestore</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {isFirebaseConnected ? 'Connected & Live' : 'Connecting...'}
                 </span>
               </div>
-              <p className="text-slate-600 text-[11px] mt-0.5">
-                Populate cloud Firestore collections with complete initial enterprise data schemas and sample records.
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                Database ID: <code className="font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">{cloudDatabaseId}</code>
+              </p>
+              <p className="text-slate-500 text-[11px]">
+                Pure cloud operational mode. All asset records, requests, borrowing transactions, PMS diagnostics, NetSuite tickets, and 2026 KPI targets are stored centrally in Google Cloud Firestore.
               </p>
             </div>
             <button
@@ -431,7 +438,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'dropdo
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all text-xs shrink-0 shadow-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${seeding ? 'animate-spin' : ''}`} />
-              <span>{seeding ? 'Syncing...' : 'Reload Sample Dataset'}</span>
+              <span>{seeding ? 'Syncing...' : 'Reload Enterprise Dataset'}</span>
             </button>
           </div>
 

@@ -28,7 +28,8 @@ import {
   Trash2,
   ExternalLink,
   Laptop,
-  MapPin
+  MapPin,
+  Cloud
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 import { 
@@ -400,8 +401,9 @@ export const KPITargets2026View: React.FC = () => {
               <Target className="w-3.5 h-3.5 text-indigo-600" />
               Corporate Measurement of Target — IT 2026
             </span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {isFirebaseConnected ? 'Cloud Synced' : 'Active Local Database'}
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+              <Cloud className="w-3 h-3 text-emerald-600" />
+              <span>{isFirebaseConnected ? 'Cloud Firestore: Synced' : 'Cloud Connecting...'}</span>
             </span>
           </div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">

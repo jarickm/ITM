@@ -6,7 +6,8 @@ import {
   setDoc, 
   deleteDoc, 
   updateDoc,
-  getDocs 
+  getDocs,
+  getDoc 
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType, initAuthListener, testConnection } from '../firebase/config';
 import { 
@@ -140,9 +141,11 @@ interface ITMContextType {
   setLanguage: (lang: LanguageCode) => void;
   t: (key: string) => string;
 
-  // System & Offline State
+  // Cloud Database & Offline State
   isOnline: boolean;
   isFirebaseConnected: boolean;
+  isCloudLoading: boolean;
+  cloudDatabaseId: string;
   alerts: AlertNotification[];
   markAlertRead: (id: string) => void;
   clearAllAlerts: () => void;
@@ -159,88 +162,21 @@ interface ITMContextType {
 const ITMContext = createContext<ITMContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_PREFIX = 'itm_pro_';
+const CLOUD_DATABASE_ID = 'ai-studio-45434206-acd2-49a2-98df-17c3dd190ec0';
 
 export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isCleared = typeof window !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-
-  // Local fallback states loaded from localStorage or initial seed
-  const [assets, setAssets] = useState<Asset[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'assets');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_ASSETS;
-  });
-
-  const [onboardings, setOnboardings] = useState<OnboardingRecord[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'onboardings');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_ONBOARDINGS;
-  });
-
-  const [offboardings, setOffboardings] = useState<OffboardingRecord[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'offboardings');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_OFFBOARDINGS;
-  });
-
-  const [requests, setRequests] = useState<RequestRecord[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'requests');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_REQUESTS;
-  });
-
-  const [borrowings, setBorrowings] = useState<BorrowingRecord[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'borrowings');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_BORROWINGS;
-  });
-
-  const [preventiveMaintenance, setPreventiveMaintenance] = useState<PreventiveMaintenanceRecord[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'pm');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_PREVENTIVE_MAINTENANCE;
-  });
-
-  const [liabilities, setLiabilities] = useState<LiabilityRecord[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'liabilities');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_LIABILITIES;
-  });
-
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'activity_logs');
-    if (isCleared) return cached ? JSON.parse(cached) : [];
-    return cached ? JSON.parse(cached) : SEED_ACTIVITY_LOGS;
-  });
-
-  const [settings, setSettingsState] = useState<SystemSettings>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'settings');
-    return cached ? JSON.parse(cached) : INITIAL_SETTINGS;
-  });
-
-  const [dropdownOptions, setDropdownOptionsState] = useState<DropdownOptionsConfig>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'dropdown_options');
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        return { ...DEFAULT_DROPDOWN_OPTIONS, ...parsed };
-      } catch {
-        return DEFAULT_DROPDOWN_OPTIONS;
-      }
-    }
-    return settings.dropdownOptions || DEFAULT_DROPDOWN_OPTIONS;
-  });
-
-  const [kpi2026, setKpi2026] = useState<KPITargets2026Data>(() => {
-    const cached = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'kpi_2026');
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch {
-        return SEED_KPI_2026;
-      }
-    }
-    return SEED_KPI_2026;
-  });
+  // Pure Cloud State (100% Google Cloud Firestore - No Local Database)
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [onboardings, setOnboardings] = useState<OnboardingRecord[]>([]);
+  const [offboardings, setOffboardings] = useState<OffboardingRecord[]>([]);
+  const [requests, setRequests] = useState<RequestRecord[]>([]);
+  const [borrowings, setBorrowings] = useState<BorrowingRecord[]>([]);
+  const [preventiveMaintenance, setPreventiveMaintenance] = useState<PreventiveMaintenanceRecord[]>([]);
+  const [liabilities, setLiabilities] = useState<LiabilityRecord[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [settings, setSettingsState] = useState<SystemSettings>(INITIAL_SETTINGS);
+  const [dropdownOptions, setDropdownOptionsState] = useState<DropdownOptionsConfig>(DEFAULT_DROPDOWN_OPTIONS);
+  const [kpi2026, setKpi2026] = useState<KPITargets2026Data>(SEED_KPI_2026);
 
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     name: 'JM Montojo',
@@ -253,56 +189,24 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [language, setLanguage] = useState<LanguageCode>('en');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(false);
+  const [isCloudLoading, setIsCloudLoading] = useState<boolean>(true);
   const [quickSearchQuery, setQuickSearchQuery] = useState<string>('');
   const [selectedAssetForQR, setSelectedAssetForQR] = useState<Asset | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [alerts, setAlerts] = useState<AlertNotification[]>([]);
 
-  // Sync to local storage
+  // Purge legacy local storage database keys to guarantee purely cloud data
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'kpi_2026', JSON.stringify(kpi2026));
-  }, [kpi2026]);
-
-  // Sync to local storage
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'assets', JSON.stringify(assets));
-  }, [assets]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'onboardings', JSON.stringify(onboardings));
-  }, [onboardings]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'offboardings', JSON.stringify(offboardings));
-  }, [offboardings]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'requests', JSON.stringify(requests));
-  }, [requests]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'borrowings', JSON.stringify(borrowings));
-  }, [borrowings]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'pm', JSON.stringify(preventiveMaintenance));
-  }, [preventiveMaintenance]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'liabilities', JSON.stringify(liabilities));
-  }, [liabilities]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'activity_logs', JSON.stringify(activityLogs));
-  }, [activityLogs]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'settings', JSON.stringify(settings));
-  }, [settings]);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'dropdown_options', JSON.stringify(dropdownOptions));
-  }, [dropdownOptions]);
+    try {
+      const keysToPurge = [
+        'assets', 'onboardings', 'offboardings', 'requests', 'borrowings',
+        'pm', 'liabilities', 'activity_logs', 'settings', 'dropdown_options', 'kpi_2026'
+      ];
+      keysToPurge.forEach(k => localStorage.removeItem(LOCAL_STORAGE_PREFIX + k));
+    } catch {
+      // Ignore
+    }
+  }, []);
 
   // Online / offline listeners
   useEffect(() => {
@@ -375,7 +279,7 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAlerts(newAlerts);
   }, [assets, borrowings, settings.lowStockThresholds]);
 
-  // Firestore Realtime Connection and Sync
+  // Firestore Realtime Cloud Connection and Stream Synchronization
   useEffect(() => {
     let unsubs: (() => void)[] = [];
 
@@ -385,108 +289,84 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const connOk = await testConnection();
       setIsFirebaseConnected(connOk);
 
-      // Attach Firestore onSnapshot listeners
+      // Verify and automatically bootstrap Cloud Firestore if newly provisioned / empty
+      try {
+        const assetsSnap = await getDocs(collection(db, 'assets'));
+        const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
+        const isExplicitlyCleared = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
+
+        if (assetsSnap.empty && !settingsSnap.exists() && !isExplicitlyCleared) {
+          console.log('[Cloud Firestore] Bootstrapping enterprise schema and sample records directly into Cloud Firestore...');
+          await seedInitialDataToFirebase();
+        }
+      } catch (err) {
+        console.warn('Cloud database pre-flight check notice:', err);
+      }
+
+      // Authoritative Cloud Firestore Snapshot Streams
       try {
         const assetsUnsub = onSnapshot(collection(db, 'assets'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Asset));
-            setAssets(list);
-          } else if (clearedFlag) {
-            setAssets([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Asset));
+          setAssets(list);
+          setIsCloudLoading(false);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'assets');
+          setIsCloudLoading(false);
         });
         unsubs.push(assetsUnsub);
 
         const onbUnsub = onSnapshot(collection(db, 'onboardings'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OnboardingRecord));
-            setOnboardings(list);
-          } else if (clearedFlag) {
-            setOnboardings([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OnboardingRecord));
+          setOnboardings(list);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'onboardings');
         });
         unsubs.push(onbUnsub);
 
         const offUnsub = onSnapshot(collection(db, 'offboardings'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OffboardingRecord));
-            setOffboardings(list);
-          } else if (clearedFlag) {
-            setOffboardings([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OffboardingRecord));
+          setOffboardings(list);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'offboardings');
         });
         unsubs.push(offUnsub);
 
         const reqUnsub = onSnapshot(collection(db, 'requests'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RequestRecord));
-            setRequests(list);
-          } else if (clearedFlag) {
-            setRequests([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RequestRecord));
+          setRequests(list);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'requests');
         });
         unsubs.push(reqUnsub);
 
         const brwUnsub = onSnapshot(collection(db, 'borrowings'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BorrowingRecord));
-            setBorrowings(list);
-          } else if (clearedFlag) {
-            setBorrowings([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BorrowingRecord));
+          setBorrowings(list);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'borrowings');
         });
         unsubs.push(brwUnsub);
 
         const pmUnsub = onSnapshot(collection(db, 'preventive_maintenance'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PreventiveMaintenanceRecord));
-            setPreventiveMaintenance(list);
-          } else if (clearedFlag) {
-            setPreventiveMaintenance([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PreventiveMaintenanceRecord));
+          setPreventiveMaintenance(list);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'preventive_maintenance');
         });
         unsubs.push(pmUnsub);
 
         const liaUnsub = onSnapshot(collection(db, 'liabilities'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LiabilityRecord));
-            setLiabilities(list);
-          } else if (clearedFlag) {
-            setLiabilities([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LiabilityRecord));
+          setLiabilities(list);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'liabilities');
         });
         unsubs.push(liaUnsub);
 
         const logUnsub = onSnapshot(collection(db, 'activity_logs'), (snapshot) => {
-          const clearedFlag = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
-            list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-            setActivityLogs(list);
-          } else if (clearedFlag) {
-            setActivityLogs([]);
-          }
+          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
+          list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+          setActivityLogs(list);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'activity_logs');
         });
@@ -495,7 +375,7 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const dropdownUnsub = onSnapshot(doc(db, 'settings', 'dropdowns'), (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data() as Partial<DropdownOptionsConfig>;
-            setDropdownOptionsState(prev => ({ ...prev, ...data }));
+            setDropdownOptionsState(prev => ({ ...DEFAULT_DROPDOWN_OPTIONS, ...prev, ...data }));
           }
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'settings/dropdowns');
@@ -505,9 +385,9 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const settingsUnsub = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data() as Partial<SystemSettings>;
-            setSettingsState(prev => ({ ...prev, ...data }));
+            setSettingsState(prev => ({ ...INITIAL_SETTINGS, ...prev, ...data }));
             if (data.dropdownOptions) {
-              setDropdownOptionsState(prev => ({ ...prev, ...data.dropdownOptions }));
+              setDropdownOptionsState(prev => ({ ...DEFAULT_DROPDOWN_OPTIONS, ...prev, ...data.dropdownOptions }));
             }
           }
         }, (err) => {
@@ -520,12 +400,15 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const data = snapshot.data() as KPITargets2026Data;
             setKpi2026(data);
           }
+          setIsCloudLoading(false);
         }, (err) => {
           handleFirestoreError(err, OperationType.GET, 'kpi_records/2026');
+          setIsCloudLoading(false);
         });
         unsubs.push(kpiUnsub);
       } catch (e) {
         console.warn('Real-time listener initialization notice:', e);
+        setIsCloudLoading(false);
       }
     });
 
@@ -1209,18 +1092,9 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Clear All System Data (Wipe database & start fresh)
+  // Clear All System Data (Wipe Cloud Firestore database & start fresh)
   const clearAllData = async () => {
     localStorage.setItem(LOCAL_STORAGE_PREFIX + 'cleared', 'true');
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'assets', JSON.stringify([]));
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'onboardings', JSON.stringify([]));
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'offboardings', JSON.stringify([]));
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'requests', JSON.stringify([]));
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'borrowings', JSON.stringify([]));
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'pm', JSON.stringify([]));
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'liabilities', JSON.stringify([]));
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'activity_logs', JSON.stringify([]));
-
     setAssets([]);
     setOnboardings([]);
     setOffboardings([]);
@@ -1247,17 +1121,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const snap = await getDocs(collection(db, col));
           await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col, d.id))));
         } catch (err) {
-          console.warn(`Error clearing collection ${col}:`, err);
+          console.warn(`Error clearing Cloud Firestore collection ${col}:`, err);
         }
       }
     }
 
-    await logActivity('SYSTEM_CLEARED', 'System', 'all', 'All system data and inventory records cleared for a fresh start');
+    await logActivity('SYSTEM_CLEARED', 'CloudFirestore', 'all', 'All system data and inventory records cleared from Cloud Firestore');
   };
 
   // Clear Inventory Assets Only
   const clearAssetsOnly = async () => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'assets', JSON.stringify([]));
     setAssets([]);
 
     if (auth.currentUser) {
@@ -1265,11 +1138,11 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const snap = await getDocs(collection(db, 'assets'));
         await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'assets', d.id))));
       } catch (err) {
-        console.warn('Error clearing assets:', err);
+        console.warn('Error clearing Cloud Firestore assets:', err);
       }
     }
 
-    await logActivity('ASSETS_CLEARED', 'Asset', 'all', 'All inventory asset records cleared');
+    await logActivity('ASSETS_CLEARED', 'CloudFirestore', 'assets', 'All inventory asset records cleared from Cloud Firestore');
   };
 
   // SECURE CLEAR ALL DATA WITH MASTER PASSWORD PROTECTION
@@ -1284,30 +1157,28 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (clearScope === 'all') {
       await clearAllData();
-      return { success: true, message: 'All system records and inventory data wiped successfully.' };
+      return { success: true, message: 'All system records and inventory data wiped from Cloud Firestore.' };
     } else if (clearScope === 'assets') {
       await clearAssetsOnly();
-      return { success: true, message: 'All inventory asset records cleared.' };
+      return { success: true, message: 'All inventory asset records cleared from Cloud Firestore.' };
     } else if (clearScope === 'requests') {
       setRequests([]);
-      localStorage.setItem(LOCAL_STORAGE_PREFIX + 'requests', JSON.stringify([]));
       if (auth.currentUser) {
         try {
           const snap = await getDocs(collection(db, 'requests'));
           await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'requests', d.id))));
         } catch (e) { console.warn(e); }
       }
-      return { success: true, message: 'All PR and incident request records cleared.' };
+      return { success: true, message: 'All PR and incident request records cleared from Cloud Firestore.' };
     } else if (clearScope === 'borrowings') {
       setBorrowings([]);
-      localStorage.setItem(LOCAL_STORAGE_PREFIX + 'borrowings', JSON.stringify([]));
       if (auth.currentUser) {
         try {
           const snap = await getDocs(collection(db, 'borrowings'));
           await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'borrowings', d.id))));
         } catch (e) { console.warn(e); }
       }
-      return { success: true, message: 'All borrowing records cleared.' };
+      return { success: true, message: 'All borrowing records cleared from Cloud Firestore.' };
     }
     return { success: false, message: 'Unknown clear scope.' };
   };
@@ -1438,12 +1309,13 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateKPI2026({ netsuiteConcerns: updatedConcerns });
   };
 
-  // Backup snapshots
+  // Backup snapshots - direct export
   const createBackupSnapshot = () => {
     const snapshot = {
       timestamp: new Date().toISOString(),
       version: '1.0.0',
-      system: 'ITM Pro Enterprise',
+      system: 'ITM Pro Enterprise Cloud',
+      database: CLOUD_DATABASE_ID,
       company: settings.companyName,
       data: {
         assets,
@@ -1456,6 +1328,7 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activityLogs,
         settings,
         dropdownOptions,
+        kpi2026,
       }
     };
 
@@ -1463,34 +1336,64 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ITM_Snapshot_Backup_${new Date().toISOString().substring(0, 10)}.json`;
+    a.download = `ITM_CloudFirestore_Backup_${new Date().toISOString().substring(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
 
     updateSettings({ lastBackupDate: new Date().toISOString() });
-    logActivity('BACKUP_EXPORT', 'System', 'snapshot', 'Created full JSON snapshot backup of ITM database');
+    logActivity('BACKUP_EXPORT', 'CloudFirestore', 'snapshot', 'Created full JSON snapshot backup of Cloud Firestore database');
   };
 
+  // Restore directly into Cloud Firestore
   const restoreBackupSnapshot = async (jsonData: string) => {
     try {
       const parsed = JSON.parse(jsonData);
-      if (parsed.data) {
-        if (parsed.data.assets) setAssets(parsed.data.assets);
-        if (parsed.data.onboardings) setOnboardings(parsed.data.onboardings);
-        if (parsed.data.offboardings) setOffboardings(parsed.data.offboardings);
-        if (parsed.data.requests) setRequests(parsed.data.requests);
-        if (parsed.data.borrowings) setBorrowings(parsed.data.borrowings);
-        if (parsed.data.preventiveMaintenance) setPreventiveMaintenance(parsed.data.preventiveMaintenance);
-        if (parsed.data.liabilities) setLiabilities(parsed.data.liabilities);
-        if (parsed.data.activityLogs) setActivityLogs(parsed.data.activityLogs);
-        if (parsed.data.settings) setSettingsState(parsed.data.settings);
-        if (parsed.data.dropdownOptions) {
-          setDropdownOptionsState(parsed.data.dropdownOptions);
-          if (auth.currentUser) {
-            await setDoc(doc(db, 'settings', 'dropdowns'), parsed.data.dropdownOptions, { merge: true });
+      if (parsed.data && auth.currentUser) {
+        if (parsed.data.assets && Array.isArray(parsed.data.assets)) {
+          for (const a of parsed.data.assets) {
+            await setDoc(doc(db, 'assets', a.id), a);
           }
         }
-        await logActivity('BACKUP_RESTORE', 'System', 'snapshot', 'Restored ITM database from JSON backup snapshot');
+        if (parsed.data.onboardings && Array.isArray(parsed.data.onboardings)) {
+          for (const o of parsed.data.onboardings) {
+            await setDoc(doc(db, 'onboardings', o.id), o);
+          }
+        }
+        if (parsed.data.offboardings && Array.isArray(parsed.data.offboardings)) {
+          for (const off of parsed.data.offboardings) {
+            await setDoc(doc(db, 'offboardings', off.id), off);
+          }
+        }
+        if (parsed.data.requests && Array.isArray(parsed.data.requests)) {
+          for (const r of parsed.data.requests) {
+            await setDoc(doc(db, 'requests', r.id), r);
+          }
+        }
+        if (parsed.data.borrowings && Array.isArray(parsed.data.borrowings)) {
+          for (const b of parsed.data.borrowings) {
+            await setDoc(doc(db, 'borrowings', b.id), b);
+          }
+        }
+        if (parsed.data.preventiveMaintenance && Array.isArray(parsed.data.preventiveMaintenance)) {
+          for (const p of parsed.data.preventiveMaintenance) {
+            await setDoc(doc(db, 'preventive_maintenance', p.id), p);
+          }
+        }
+        if (parsed.data.liabilities && Array.isArray(parsed.data.liabilities)) {
+          for (const l of parsed.data.liabilities) {
+            await setDoc(doc(db, 'liabilities', l.id), l);
+          }
+        }
+        if (parsed.data.dropdownOptions) {
+          await setDoc(doc(db, 'settings', 'dropdowns'), parsed.data.dropdownOptions, { merge: true });
+        }
+        if (parsed.data.settings) {
+          await setDoc(doc(db, 'settings', 'global'), parsed.data.settings, { merge: true });
+        }
+        if (parsed.data.kpi2026) {
+          await setDoc(doc(db, 'kpi_records', '2026'), parsed.data.kpi2026, { merge: true });
+        }
+        await logActivity('BACKUP_RESTORE', 'CloudFirestore', 'snapshot', 'Restored ITM database directly into Cloud Firestore');
       }
     } catch (err) {
       console.error('Failed to parse backup JSON:', err);
@@ -1571,6 +1474,8 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         t,
         isOnline,
         isFirebaseConnected,
+        isCloudLoading,
+        cloudDatabaseId: CLOUD_DATABASE_ID,
         alerts,
         markAlertRead,
         clearAllAlerts,
