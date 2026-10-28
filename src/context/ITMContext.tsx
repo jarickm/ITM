@@ -1,15 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  updateDoc,
-  getDocs,
-  getDoc 
-} from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType, initAuthListener, testConnection } from '../firebase/config';
+  signInWithGoogleWorkspace as authGoogleSignIn, 
+  logoutGoogleWorkspace as authGoogleSignOut, 
+  initWorkspaceAuthListener 
+} from '../firebase/config';
 import { 
   Asset, 
   OnboardingRecord, 
@@ -127,23 +121,30 @@ interface ITMContextType {
   // Settings & DB Management
   updateSettings: (newSettings: Partial<SystemSettings>) => Promise<void>;
   seedInitialDataToFirebase: () => Promise<void>;
+  seedInitialDataToSupabase: () => Promise<void>;
   clearAllData: () => Promise<void>;
   clearAssetsOnly: () => Promise<void>;
   clearDataWithPassword: (password: string, clearScope: 'all' | 'assets' | 'requests' | 'borrowings') => Promise<{ success: boolean; message: string }>;
   createBackupSnapshot: () => void;
   restoreBackupSnapshot: (jsonData: string) => Promise<void>;
+  refreshFromSupabase: () => Promise<void>;
 
-  // Auth & Roles
+  // Auth & Roles & Google Workspace
   currentUser: UserProfile;
   setCurrentUser: (user: UserProfile) => void;
   setUserRole: (role: UserRole) => void;
+  signInWithGoogleWorkspace: () => Promise<void>;
+  logoutGoogleWorkspace: () => Promise<void>;
+  isGoogleWorkspaceLoggedIn: boolean;
   language: LanguageCode;
   setLanguage: (lang: LanguageCode) => void;
   t: (key: string) => string;
 
-  // Cloud Database & Offline State
+  // Cloud Database (Supabase PostgreSQL) State
   isOnline: boolean;
-  isFirebaseConnected: boolean;
+  isFirebaseConnected: boolean; // Aliased to isSupabaseConnected for backward compatibility
+  isSupabaseConnected: boolean;
+  supabaseHost: string;
   isCloudLoading: boolean;
   cloudDatabaseId: string;
   alerts: AlertNotification[];
@@ -161,19 +162,18 @@ interface ITMContextType {
 
 const ITMContext = createContext<ITMContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_PREFIX = 'itm_pro_';
-const CLOUD_DATABASE_ID = 'ai-studio-45434206-acd2-49a2-98df-17c3dd190ec0';
+const SUPABASE_HOST = 'aws-0-ap-northeast-1.pooler.supabase.com';
 
 export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Pure Cloud State (100% Google Cloud Firestore - No Local Database)
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [onboardings, setOnboardings] = useState<OnboardingRecord[]>([]);
-  const [offboardings, setOffboardings] = useState<OffboardingRecord[]>([]);
-  const [requests, setRequests] = useState<RequestRecord[]>([]);
-  const [borrowings, setBorrowings] = useState<BorrowingRecord[]>([]);
-  const [preventiveMaintenance, setPreventiveMaintenance] = useState<PreventiveMaintenanceRecord[]>([]);
-  const [liabilities, setLiabilities] = useState<LiabilityRecord[]>([]);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  // Pure Supabase PostgreSQL State - initialized with baseline enterprise records for zero UI flicker/locking
+  const [assets, setAssets] = useState<Asset[]>(SEED_ASSETS);
+  const [onboardings, setOnboardings] = useState<OnboardingRecord[]>(SEED_ONBOARDINGS);
+  const [offboardings, setOffboardings] = useState<OffboardingRecord[]>(SEED_OFFBOARDINGS);
+  const [requests, setRequests] = useState<RequestRecord[]>(SEED_REQUESTS);
+  const [borrowings, setBorrowings] = useState<BorrowingRecord[]>(SEED_BORROWINGS);
+  const [preventiveMaintenance, setPreventiveMaintenance] = useState<PreventiveMaintenanceRecord[]>(SEED_PREVENTIVE_MAINTENANCE);
+  const [liabilities, setLiabilities] = useState<LiabilityRecord[]>(SEED_LIABILITIES);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(SEED_ACTIVITY_LOGS);
   const [settings, setSettingsState] = useState<SystemSettings>(INITIAL_SETTINGS);
   const [dropdownOptions, setDropdownOptionsState] = useState<DropdownOptionsConfig>(DEFAULT_DROPDOWN_OPTIONS);
   const [kpi2026, setKpi2026] = useState<KPITargets2026Data>(SEED_KPI_2026);
@@ -181,28 +181,29 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     name: 'JM Montojo',
     email: 'jmmontojo2022@gmail.com',
-    role: 'Admin',
+    role: 'Super Admin',
     department: 'IT Infrastructure & Security',
     adId: 'CORP\\jmmontojo',
   });
 
+  const [isGoogleWorkspaceLoggedIn, setIsGoogleWorkspaceLoggedIn] = useState<boolean>(false);
   const [language, setLanguage] = useState<LanguageCode>('en');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-  const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(false);
-  const [isCloudLoading, setIsCloudLoading] = useState<boolean>(true);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(true);
+  const [isCloudLoading, setIsCloudLoading] = useState<boolean>(false);
   const [quickSearchQuery, setQuickSearchQuery] = useState<string>('');
   const [selectedAssetForQR, setSelectedAssetForQR] = useState<Asset | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [alerts, setAlerts] = useState<AlertNotification[]>([]);
 
-  // Purge legacy local storage database keys to guarantee purely cloud data
+  // Clear legacy local storage keys
   useEffect(() => {
     try {
       const keysToPurge = [
         'assets', 'onboardings', 'offboardings', 'requests', 'borrowings',
-        'pm', 'liabilities', 'activity_logs', 'settings', 'dropdown_options', 'kpi_2026'
+        'pm', 'liabilities', 'activity_logs', 'settings', 'dropdown_options', 'kpi_2026', 'cleared'
       ];
-      keysToPurge.forEach(k => localStorage.removeItem(LOCAL_STORAGE_PREFIX + k));
+      keysToPurge.forEach(k => localStorage.removeItem('itm_pro_' + k));
     } catch {
       // Ignore
     }
@@ -220,7 +221,99 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Compute Alerts dynamically (Low stock, upcoming maintenance, overdue borrowings, expiring warranties)
+  // Google Workspace Authentication Listener
+  useEffect(() => {
+    const unsub = initWorkspaceAuthListener((user) => {
+      if (user) {
+        setIsGoogleWorkspaceLoggedIn(true);
+        setCurrentUser(prev => ({
+          ...prev,
+          name: user.displayName || prev.name,
+          email: user.email || prev.email,
+          avatarUrl: user.photoURL || undefined,
+          role: user.email === 'jmmontojo2022@gmail.com' ? 'Super Admin' : prev.role,
+        }));
+      } else {
+        setIsGoogleWorkspaceLoggedIn(false);
+      }
+    });
+
+    return () => unsub();
+  }, []);
+
+  const signInWithGoogleWorkspace = async () => {
+    try {
+      const user = await authGoogleSignIn();
+      if (user) {
+        setIsGoogleWorkspaceLoggedIn(true);
+        setCurrentUser(prev => ({
+          ...prev,
+          name: user.displayName || prev.name,
+          email: user.email || prev.email,
+          avatarUrl: user.photoURL || undefined,
+          role: user.email === 'jmmontojo2022@gmail.com' ? 'Super Admin' : prev.role,
+        }));
+        await logActivity('WORKSPACE_LOGIN', 'User', user.email || '', `Signed in via Google Workspace (${user.email})`);
+      }
+    } catch (err: any) {
+      console.error('Workspace Login Error:', err);
+    }
+  };
+
+  const logoutGoogleWorkspace = async () => {
+    await authGoogleSignOut();
+    setIsGoogleWorkspaceLoggedIn(false);
+    await logActivity('WORKSPACE_LOGOUT', 'User', currentUser.email, `Signed out from Google Workspace`);
+  };
+
+  // Pull All Data from Supabase PostgreSQL API
+  const refreshFromSupabase = useCallback(async () => {
+    try {
+      const res = await fetch('/api/all-data');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          if (Array.isArray(data.assets) && data.assets.length > 0) setAssets(data.assets);
+          if (Array.isArray(data.onboardings)) setOnboardings(data.onboardings);
+          if (Array.isArray(data.offboardings)) setOffboardings(data.offboardings);
+          if (Array.isArray(data.requests)) setRequests(data.requests);
+          if (Array.isArray(data.borrowings)) setBorrowings(data.borrowings);
+          if (Array.isArray(data.preventiveMaintenance)) setPreventiveMaintenance(data.preventiveMaintenance);
+          if (Array.isArray(data.liabilities)) setLiabilities(data.liabilities);
+          if (Array.isArray(data.activityLogs)) setActivityLogs(data.activityLogs);
+          if (data.settings) setSettingsState(data.settings);
+          if (data.dropdownOptions) setDropdownOptionsState(data.dropdownOptions);
+          if (data.kpi2026) setKpi2026(data.kpi2026);
+          setIsSupabaseConnected(true);
+        }
+      }
+    } catch (err) {
+      console.warn('[Supabase Sync Notice]:', err);
+    } finally {
+      setIsCloudLoading(false);
+    }
+  }, []);
+
+  // Initial load and periodic polling for real-time collaboration
+  useEffect(() => {
+    refreshFromSupabase();
+
+    // Re-sync on window focus
+    const handleFocus = () => {
+      refreshFromSupabase();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Poll every 15 seconds for updates
+    const interval = setInterval(refreshFromSupabase, 15000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [refreshFromSupabase]);
+
+  // Compute Alerts dynamically
   useEffect(() => {
     const newAlerts: AlertNotification[] = [];
 
@@ -279,145 +372,6 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAlerts(newAlerts);
   }, [assets, borrowings, settings.lowStockThresholds]);
 
-  // Firestore Realtime Cloud Connection and Stream Synchronization
-  useEffect(() => {
-    let unsubs: (() => void)[] = [];
-
-    const unsubscribeAuth = initAuthListener(async (user) => {
-      if (!user) return;
-
-      const connOk = await testConnection();
-      setIsFirebaseConnected(connOk);
-
-      // Verify and automatically bootstrap Cloud Firestore if newly provisioned / empty
-      try {
-        const assetsSnap = await getDocs(collection(db, 'assets'));
-        const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
-        const isExplicitlyCleared = localStorage.getItem(LOCAL_STORAGE_PREFIX + 'cleared') === 'true';
-
-        if (assetsSnap.empty && !settingsSnap.exists() && !isExplicitlyCleared) {
-          console.log('[Cloud Firestore] Bootstrapping enterprise schema and sample records directly into Cloud Firestore...');
-          await seedInitialDataToFirebase();
-        }
-      } catch (err) {
-        console.warn('Cloud database pre-flight check notice:', err);
-      }
-
-      // Authoritative Cloud Firestore Snapshot Streams
-      try {
-        const assetsUnsub = onSnapshot(collection(db, 'assets'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Asset));
-          setAssets(list);
-          setIsCloudLoading(false);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'assets');
-          setIsCloudLoading(false);
-        });
-        unsubs.push(assetsUnsub);
-
-        const onbUnsub = onSnapshot(collection(db, 'onboardings'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OnboardingRecord));
-          setOnboardings(list);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'onboardings');
-        });
-        unsubs.push(onbUnsub);
-
-        const offUnsub = onSnapshot(collection(db, 'offboardings'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OffboardingRecord));
-          setOffboardings(list);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'offboardings');
-        });
-        unsubs.push(offUnsub);
-
-        const reqUnsub = onSnapshot(collection(db, 'requests'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RequestRecord));
-          setRequests(list);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'requests');
-        });
-        unsubs.push(reqUnsub);
-
-        const brwUnsub = onSnapshot(collection(db, 'borrowings'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BorrowingRecord));
-          setBorrowings(list);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'borrowings');
-        });
-        unsubs.push(brwUnsub);
-
-        const pmUnsub = onSnapshot(collection(db, 'preventive_maintenance'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PreventiveMaintenanceRecord));
-          setPreventiveMaintenance(list);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'preventive_maintenance');
-        });
-        unsubs.push(pmUnsub);
-
-        const liaUnsub = onSnapshot(collection(db, 'liabilities'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LiabilityRecord));
-          setLiabilities(list);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'liabilities');
-        });
-        unsubs.push(liaUnsub);
-
-        const logUnsub = onSnapshot(collection(db, 'activity_logs'), (snapshot) => {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
-          list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-          setActivityLogs(list);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'activity_logs');
-        });
-        unsubs.push(logUnsub);
-
-        const dropdownUnsub = onSnapshot(doc(db, 'settings', 'dropdowns'), (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data() as Partial<DropdownOptionsConfig>;
-            setDropdownOptionsState(prev => ({ ...DEFAULT_DROPDOWN_OPTIONS, ...prev, ...data }));
-          }
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'settings/dropdowns');
-        });
-        unsubs.push(dropdownUnsub);
-
-        const settingsUnsub = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data() as Partial<SystemSettings>;
-            setSettingsState(prev => ({ ...INITIAL_SETTINGS, ...prev, ...data }));
-            if (data.dropdownOptions) {
-              setDropdownOptionsState(prev => ({ ...DEFAULT_DROPDOWN_OPTIONS, ...prev, ...data.dropdownOptions }));
-            }
-          }
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'settings/global');
-        });
-        unsubs.push(settingsUnsub);
-
-        const kpiUnsub = onSnapshot(doc(db, 'kpi_records', '2026'), (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data() as KPITargets2026Data;
-            setKpi2026(data);
-          }
-          setIsCloudLoading(false);
-        }, (err) => {
-          handleFirestoreError(err, OperationType.GET, 'kpi_records/2026');
-          setIsCloudLoading(false);
-        });
-        unsubs.push(kpiUnsub);
-      } catch (e) {
-        console.warn('Real-time listener initialization notice:', e);
-        setIsCloudLoading(false);
-      }
-    });
-
-    return () => {
-      unsubscribeAuth();
-      unsubs.forEach(u => u());
-    };
-  }, []);
-
   // Translation helper
   const t = useCallback((key: string): string => {
     const dict = TRANSLATIONS[language] || TRANSLATIONS['en'];
@@ -438,12 +392,14 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setActivityLogs(prev => [newLog, ...prev]);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'activity_logs', newLog.id), newLog);
-      } catch (err) {
-        console.warn('Activity log sync notice:', err);
-      }
+    try {
+      await fetch('/api/activity-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLog),
+      });
+    } catch (err) {
+      console.warn('Activity log sync notice:', err);
     }
   };
 
@@ -461,12 +417,14 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAssets(prev => [newAsset, ...prev]);
     await logActivity('ASSET_CREATE', 'Asset', newAsset.assetCode, `Created asset ${newAsset.employeeOrDeviceName} (${newAsset.assetCode})`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'assets', id), newAsset);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `assets/${id}`);
-      }
+    try {
+      await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAsset),
+      });
+    } catch (err) {
+      console.error('Asset creation error:', err);
     }
     return id;
   };
@@ -475,14 +433,18 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date().toISOString();
     setAssets(prev => prev.map(a => a.id === id ? { ...a, ...updates, updatedAt: now } : a));
     const target = assets.find(a => a.id === id);
+    const updated = { ...(target || {}), ...updates, id, updatedAt: now } as Asset;
+
     await logActivity('ASSET_UPDATE', 'Asset', target?.assetCode || id, `Updated asset fields: ${Object.keys(updates).join(', ')}`);
 
-    if (auth.currentUser) {
-      try {
-        await updateDoc(doc(db, 'assets', id), { ...updates, updatedAt: now });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `assets/${id}`);
-      }
+    try {
+      await fetch(`/api/assets/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error('Asset update error:', err);
     }
   };
 
@@ -491,65 +453,106 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAssets(prev => prev.filter(a => a.id !== id));
     await logActivity('ASSET_DELETE', 'Asset', target?.assetCode || id, `Deleted asset ${target?.employeeOrDeviceName}`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'assets', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `assets/${id}`);
-      }
+    try {
+      await fetch(`/api/assets/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Asset delete error:', err);
     }
   };
 
-  // ASSET CUSTODY TRANSFER & TURNOVER (GUI SUPPORT FOR EMPLOYEE RESIGNATION/TRANSFER)
+  // ASSET CUSTODY TRANSFER & TURNOVER
   const transferAsset = async (transferData: AssetCustodyTransfer) => {
-    const targetAsset = assets.find(a => a.id === transferData.id || a.assetCode === transferData.id);
-    if (!targetAsset) return;
-
-    const existingHistory = targetAsset.custodyHistory || [];
-    const updatedHistory = [transferData, ...existingHistory];
-
-    const updates: Partial<Asset> = {
-      employeeOrDeviceName: transferData.toEmployee,
-      department: transferData.toDepartment,
-      location: transferData.toBranch || targetAsset.location,
-      status: transferData.reason === 'Return to IT Stock' ? 'Available' : 'In Use',
-      custodyHistory: updatedHistory,
-      notes: `${targetAsset.notes || ''}\n[${transferData.transferDate}] Transferred from ${transferData.fromEmployee} to ${transferData.toEmployee} (${transferData.reason}). Slip: ${transferData.turnoverReceiptNumber}`.trim(),
-    };
-
-    await updateAsset(targetAsset.id, updates);
-    await logActivity(
-      'ASSET_CUSTODY_TRANSFER',
-      'Asset',
-      targetAsset.assetCode,
-      `Device ${targetAsset.assetCode} transferred from ${transferData.fromEmployee} (${transferData.fromDepartment}) to ${transferData.toEmployee} (${transferData.toDepartment}). Reason: ${transferData.reason}. Turnover Slip #${transferData.turnoverReceiptNumber}`
+    const asset = assets.find(a => 
+      a.id === transferData.id || 
+      a.employeeOrDeviceName === transferData.fromEmployee ||
+      a.assetCode === transferData.turnoverReceiptNumber
     );
+
+    const now = new Date().toISOString();
+    let targetAssetId = asset?.id;
+
+    if (!targetAssetId) {
+      const match = assets.find(a => 
+        a.employeeOrDeviceName.toLowerCase().includes(transferData.fromEmployee.toLowerCase())
+      );
+      if (match) targetAssetId = match.id;
+    }
+
+    if (targetAssetId) {
+      const target = assets.find(a => a.id === targetAssetId)!;
+      const history = target.custodyHistory || [];
+      const updatedHistory = [transferData, ...history];
+
+      const newStatus = transferData.toEmployee === 'IT Reserve Pool' || transferData.toEmployee === 'IT Department' 
+        ? 'Available' 
+        : 'In Use';
+
+      await updateAsset(targetAssetId, {
+        employeeOrDeviceName: transferData.toEmployee,
+        department: transferData.toDepartment,
+        location: transferData.toBranch || target.location,
+        status: newStatus as any,
+        custodyHistory: updatedHistory,
+        updatedAt: now,
+      });
+
+      await logActivity(
+        'ASSET_CUSTODY_TRANSFER',
+        'Asset',
+        target.assetCode,
+        `Device custody transferred from ${transferData.fromEmployee} (${transferData.fromDepartment}) to ${transferData.toEmployee} (${transferData.toDepartment}). Reason: ${transferData.reason}. Turnover Ref: ${transferData.turnoverReceiptNumber}`
+      );
+    } else {
+      await logActivity(
+        'CUSTODY_TRANSFER_LOG',
+        'TurnoverSlip',
+        transferData.turnoverReceiptNumber,
+        `Turnover recorded from ${transferData.fromEmployee} to ${transferData.toEmployee}. Reason: ${transferData.reason}`
+      );
+    }
   };
 
-  // MARK ASSET PMS DONE
-  const markAssetPMSDone = async (assetId: string, pmsHalf: '1st Half' | '2nd Half' | 'Both', technician: string, remarks?: string) => {
-    const today = new Date().toISOString().substring(0, 10);
+  // MARK PMS DONE ON ASSET
+  const markAssetPMSDone = async (
+    assetId: string, 
+    pmsHalf: '1st Half' | '2nd Half' | 'Both', 
+    technician: string, 
+    remarks?: string
+  ) => {
+    const target = assets.find(a => a.id === assetId);
+    if (!target) return;
+
+    const now = new Date().toISOString();
+    const todayStr = now.substring(0, 10);
+
     await updateAsset(assetId, {
       pmsCompleted: true,
-      pmsDate: today,
       pmsHalf,
+      pmsDate: todayStr,
       pmsTechnician: technician,
-      pmsRemarks: remarks || 'Semi-annual inspection and diagnostics completed.',
+      pmsRemarks: remarks || 'Semi-annual preventive maintenance diagnostics completed.',
+      updatedAt: now,
     });
-    const asset = assets.find(a => a.id === assetId);
-    if (asset) {
-      await addPreventiveMaintenance({
-        description: `PMS Inspection (${pmsHalf}) - ${asset.employeeOrDeviceName}`,
-        date: today,
-        datePurchase: asset.purchaseDate || today,
-        assetCode: asset.assetCode,
-        activityWorkDone: `Completed thermal clean, diagnostic health test, memory check, and OS updates. ${remarks || ''}`.trim(),
-        performedBy: technician,
-        status: 'Completed',
-        recommendation: 'Unit in good operational state. Keep in service.',
-        department: asset.department,
-      });
-    }
+
+    await addPreventiveMaintenance({
+      description: `${target.employeeOrDeviceName} - ${target.specificationOrSN} (${target.category})`,
+      date: todayStr,
+      datePurchase: target.purchaseDate || todayStr,
+      assetCode: target.assetCode,
+      activityWorkDone: `PMS (${pmsHalf}) certified. Diagnostics completed.`,
+      performedBy: technician,
+      status: 'Completed',
+      recommendation: remarks || 'Diagnostics passed. Continue regular maintenance.',
+      department: target.department || 'IT Operations',
+      nextMaintenanceDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10),
+    });
+
+    await logActivity(
+      'PMS_COMPLETED',
+      'Asset',
+      target.assetCode,
+      `Marked PMS (${pmsHalf}) as Completed for ${target.employeeOrDeviceName} (${target.assetCode}) by ${technician}`
+    );
   };
 
   // CRUD ONBOARDING
@@ -557,43 +560,50 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const id = `onb-${Date.now()}`;
     const now = new Date().toISOString();
     const newRec: OnboardingRecord = { ...rec, id, createdAt: now, updatedAt: now };
-    setOnboardings(prev => [newRec, ...prev]);
-    await logActivity('ONBOARDING_CREATE', 'Onboarding', newRec.controlNumber, `Registered onboarding for ${newRec.employeeName}`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'onboardings', id), newRec);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `onboardings/${id}`);
-      }
+    setOnboardings(prev => [newRec, ...prev]);
+    await logActivity('ONBOARDING_CREATE', 'Onboarding', newRec.employeeName, `Created onboarding for ${newRec.employeeName} (${newRec.position})`);
+
+    try {
+      await fetch('/api/onboardings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRec),
+      });
+    } catch (err) {
+      console.error(err);
     }
     return id;
   };
 
   const updateOnboarding = async (id: string, updates: Partial<OnboardingRecord>) => {
     const now = new Date().toISOString();
-    setOnboardings(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: now } : r));
-    await logActivity('ONBOARDING_UPDATE', 'Onboarding', id, `Updated onboarding record`);
+    setOnboardings(prev => prev.map(o => o.id === id ? { ...o, ...updates, updatedAt: now } : o));
+    const target = onboardings.find(o => o.id === id);
+    const updated = { ...(target || {}), ...updates, id, updatedAt: now } as OnboardingRecord;
 
-    if (auth.currentUser) {
-      try {
-        await updateDoc(doc(db, 'onboardings', id), { ...updates, updatedAt: now });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `onboardings/${id}`);
-      }
+    await logActivity('ONBOARDING_UPDATE', 'Onboarding', target?.employeeName || id, `Updated onboarding for ${target?.employeeName}`);
+
+    try {
+      await fetch(`/api/onboardings/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const deleteOnboarding = async (id: string) => {
-    setOnboardings(prev => prev.filter(r => r.id !== id));
-    await logActivity('ONBOARDING_DELETE', 'Onboarding', id, `Deleted onboarding record`);
+    const target = onboardings.find(o => o.id === id);
+    setOnboardings(prev => prev.filter(o => o.id !== id));
+    await logActivity('ONBOARDING_DELETE', 'Onboarding', target?.employeeName || id, `Deleted onboarding for ${target?.employeeName}`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'onboardings', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `onboardings/${id}`);
-      }
+    try {
+      await fetch(`/api/onboardings/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -602,60 +612,70 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const id = `off-${Date.now()}`;
     const now = new Date().toISOString();
     const newRec: OffboardingRecord = { ...rec, id, createdAt: now, updatedAt: now };
-    setOffboardings(prev => [newRec, ...prev]);
-    await logActivity('OFFBOARDING_CREATE', 'Offboarding', newRec.controlNumber, `Created separation clearance for ${newRec.employeeName}`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'offboardings', id), newRec);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `offboardings/${id}`);
-      }
+    setOffboardings(prev => [newRec, ...prev]);
+    await logActivity('OFFBOARDING_CREATE', 'Offboarding', newRec.employeeName, `Created offboarding for ${newRec.employeeName}`);
+
+    try {
+      await fetch('/api/offboardings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRec),
+      });
+    } catch (err) {
+      console.error(err);
     }
     return id;
   };
 
   const updateOffboarding = async (id: string, updates: Partial<OffboardingRecord>) => {
     const now = new Date().toISOString();
-    setOffboardings(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: now } : r));
-    await logActivity('OFFBOARDING_UPDATE', 'Offboarding', id, `Updated offboarding clearance`);
+    setOffboardings(prev => prev.map(o => o.id === id ? { ...o, ...updates, updatedAt: now } : o));
+    const target = offboardings.find(o => o.id === id);
+    const updated = { ...(target || {}), ...updates, id, updatedAt: now } as OffboardingRecord;
 
-    if (auth.currentUser) {
-      try {
-        await updateDoc(doc(db, 'offboardings', id), { ...updates, updatedAt: now });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `offboardings/${id}`);
-      }
+    await logActivity('OFFBOARDING_UPDATE', 'Offboarding', target?.employeeName || id, `Updated offboarding for ${target?.employeeName}`);
+
+    try {
+      await fetch(`/api/offboardings/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const deleteOffboarding = async (id: string) => {
-    setOffboardings(prev => prev.filter(r => r.id !== id));
-    await logActivity('OFFBOARDING_DELETE', 'Offboarding', id, `Deleted offboarding clearance`);
+    const target = offboardings.find(o => o.id === id);
+    setOffboardings(prev => prev.filter(o => o.id !== id));
+    await logActivity('OFFBOARDING_DELETE', 'Offboarding', target?.employeeName || id, `Deleted offboarding for ${target?.employeeName}`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'offboardings', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `offboardings/${id}`);
-      }
+    try {
+      await fetch(`/api/offboardings/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  // CRUD REQUESTS (PR / IER)
+  // CRUD REQUESTS
   const addRequest = async (rec: Omit<RequestRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
     const id = `req-${Date.now()}`;
     const now = new Date().toISOString();
     const newRec: RequestRecord = { ...rec, id, createdAt: now, updatedAt: now };
-    setRequests(prev => [newRec, ...prev]);
-    await logActivity('REQUEST_CREATE', 'Request', newRec.referenceNo, `Submitted ${newRec.requestType} ticket: ${newRec.referenceNo}`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'requests', id), newRec);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `requests/${id}`);
-      }
+    setRequests(prev => [newRec, ...prev]);
+    await logActivity('REQUEST_CREATE', 'Request', newRec.referenceNo, `Created ${newRec.requestType} ticket: ${newRec.actionsTakenOrRemarks || newRec.departmentOrBranches}`);
+
+    try {
+      await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRec),
+      });
+    } catch (err) {
+      console.error(err);
     }
     return id;
   };
@@ -663,72 +683,83 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateRequest = async (id: string, updates: Partial<RequestRecord>) => {
     const now = new Date().toISOString();
     setRequests(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: now } : r));
-    await logActivity('REQUEST_UPDATE', 'Request', id, `Updated request ticket status/details`);
+    const target = requests.find(r => r.id === id);
+    const updated = { ...(target || {}), ...updates, id, updatedAt: now } as RequestRecord;
 
-    if (auth.currentUser) {
-      try {
-        await updateDoc(doc(db, 'requests', id), { ...updates, updatedAt: now });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `requests/${id}`);
-      }
+    await logActivity('REQUEST_UPDATE', 'Request', target?.referenceNo || id, `Updated request ticket ${target?.referenceNo || id}`);
+
+    try {
+      await fetch(`/api/requests/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const deleteRequest = async (id: string) => {
+    const target = requests.find(r => r.id === id);
     setRequests(prev => prev.filter(r => r.id !== id));
-    await logActivity('REQUEST_DELETE', 'Request', id, `Deleted request ticket`);
+    await logActivity('REQUEST_DELETE', 'Request', target?.referenceNo || id, `Deleted request ticket ${target?.referenceNo || id}`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'requests', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `requests/${id}`);
-      }
+    try {
+      await fetch(`/api/requests/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  // CRUD BORROWINGS
+  // CRUD BORROWING
   const addBorrowing = async (rec: Omit<BorrowingRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
     const id = `brw-${Date.now()}`;
     const now = new Date().toISOString();
     const newRec: BorrowingRecord = { ...rec, id, createdAt: now, updatedAt: now };
-    setBorrowings(prev => [newRec, ...prev]);
-    await logActivity('BORROW_CREATE', 'Borrowing', id, `Borrowed ${newRec.itemCategory} by ${newRec.borrowerName}`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'borrowings', id), newRec);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `borrowings/${id}`);
-      }
+    setBorrowings(prev => [newRec, ...prev]);
+    await logActivity('BORROWING_CREATE', 'Borrowing', newRec.borrowerName, `Borrowed ${newRec.itemCategory} by ${newRec.borrowerName}`);
+
+    try {
+      await fetch('/api/borrowings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRec),
+      });
+    } catch (err) {
+      console.error(err);
     }
     return id;
   };
 
   const updateBorrowing = async (id: string, updates: Partial<BorrowingRecord>) => {
     const now = new Date().toISOString();
-    setBorrowings(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: now } : r));
-    await logActivity('BORROW_UPDATE', 'Borrowing', id, `Updated equipment loan status`);
+    setBorrowings(prev => prev.map(b => b.id === id ? { ...b, ...updates, updatedAt: now } : b));
+    const target = borrowings.find(b => b.id === id);
+    const updated = { ...(target || {}), ...updates, id, updatedAt: now } as BorrowingRecord;
 
-    if (auth.currentUser) {
-      try {
-        await updateDoc(doc(db, 'borrowings', id), { ...updates, updatedAt: now });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `borrowings/${id}`);
-      }
+    await logActivity('BORROWING_UPDATE', 'Borrowing', target?.borrowerName || id, `Updated borrowing for ${target?.borrowerName}`);
+
+    try {
+      await fetch(`/api/borrowings/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const deleteBorrowing = async (id: string) => {
-    setBorrowings(prev => prev.filter(r => r.id !== id));
-    await logActivity('BORROW_DELETE', 'Borrowing', id, `Deleted equipment loan`);
+    const target = borrowings.find(b => b.id === id);
+    setBorrowings(prev => prev.filter(b => b.id !== id));
+    await logActivity('BORROWING_DELETE', 'Borrowing', target?.borrowerName || id, `Deleted borrowing for ${target?.borrowerName}`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'borrowings', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `borrowings/${id}`);
-      }
+    try {
+      await fetch(`/api/borrowings/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -737,43 +768,50 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const id = `pm-${Date.now()}`;
     const now = new Date().toISOString();
     const newRec: PreventiveMaintenanceRecord = { ...rec, id, createdAt: now, updatedAt: now };
-    setPreventiveMaintenance(prev => [newRec, ...prev]);
-    await logActivity('PM_CREATE', 'PreventiveMaintenance', newRec.assetCode, `Recorded PM activity for ${newRec.assetCode}`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'preventive_maintenance', id), newRec);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `preventive_maintenance/${id}`);
-      }
+    setPreventiveMaintenance(prev => [newRec, ...prev]);
+    await logActivity('PM_CREATE', 'PreventiveMaintenance', newRec.assetCode, `Logged maintenance for ${newRec.assetCode}`);
+
+    try {
+      await fetch('/api/preventive-maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRec),
+      });
+    } catch (err) {
+      console.error(err);
     }
     return id;
   };
 
   const updatePreventiveMaintenance = async (id: string, updates: Partial<PreventiveMaintenanceRecord>) => {
     const now = new Date().toISOString();
-    setPreventiveMaintenance(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: now } : r));
-    await logActivity('PM_UPDATE', 'PreventiveMaintenance', id, `Updated PM record`);
+    setPreventiveMaintenance(prev => prev.map(p => p.id === id ? { ...p, ...updates, updatedAt: now } : p));
+    const target = preventiveMaintenance.find(p => p.id === id);
+    const updated = { ...(target || {}), ...updates, id, updatedAt: now } as PreventiveMaintenanceRecord;
 
-    if (auth.currentUser) {
-      try {
-        await updateDoc(doc(db, 'preventive_maintenance', id), { ...updates, updatedAt: now });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `preventive_maintenance/${id}`);
-      }
+    await logActivity('PM_UPDATE', 'PreventiveMaintenance', target?.assetCode || id, `Updated maintenance for ${target?.assetCode}`);
+
+    try {
+      await fetch(`/api/preventive-maintenance/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const deletePreventiveMaintenance = async (id: string) => {
-    setPreventiveMaintenance(prev => prev.filter(r => r.id !== id));
-    await logActivity('PM_DELETE', 'PreventiveMaintenance', id, `Deleted PM log`);
+    const target = preventiveMaintenance.find(p => p.id === id);
+    setPreventiveMaintenance(prev => prev.filter(p => p.id !== id));
+    await logActivity('PM_DELETE', 'PreventiveMaintenance', target?.assetCode || id, `Deleted maintenance for ${target?.assetCode}`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'preventive_maintenance', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `preventive_maintenance/${id}`);
-      }
+    try {
+      await fetch(`/api/preventive-maintenance/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -782,74 +820,84 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const id = `lia-${Date.now()}`;
     const now = new Date().toISOString();
     const newRec: LiabilityRecord = { ...rec, id, createdAt: now, updatedAt: now };
-    setLiabilities(prev => [newRec, ...prev]);
-    await logActivity('LIABILITY_CREATE', 'Liability', newRec.assetCode, `Issued accountability form to ${newRec.employeeName}`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'liabilities', id), newRec);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `liabilities/${id}`);
-      }
+    setLiabilities(prev => [newRec, ...prev]);
+    await logActivity('LIABILITY_CREATE', 'Liability', newRec.employeeName, `Created liability for ${newRec.employeeName}: ${newRec.itemDescription}`);
+
+    try {
+      await fetch('/api/liabilities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRec),
+      });
+    } catch (err) {
+      console.error(err);
     }
     return id;
   };
 
   const updateLiability = async (id: string, updates: Partial<LiabilityRecord>) => {
     const now = new Date().toISOString();
-    setLiabilities(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: now } : r));
-    await logActivity('LIABILITY_UPDATE', 'Liability', id, `Updated liability custody record`);
+    setLiabilities(prev => prev.map(l => l.id === id ? { ...l, ...updates, updatedAt: now } : l));
+    const target = liabilities.find(l => l.id === id);
+    const updated = { ...(target || {}), ...updates, id, updatedAt: now } as LiabilityRecord;
 
-    if (auth.currentUser) {
-      try {
-        await updateDoc(doc(db, 'liabilities', id), { ...updates, updatedAt: now });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `liabilities/${id}`);
-      }
+    await logActivity('LIABILITY_UPDATE', 'Liability', target?.employeeName || id, `Updated liability for ${target?.employeeName}`);
+
+    try {
+      await fetch(`/api/liabilities/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const deleteLiability = async (id: string) => {
-    setLiabilities(prev => prev.filter(r => r.id !== id));
-    await logActivity('LIABILITY_DELETE', 'Liability', id, `Deleted liability record`);
+    const target = liabilities.find(l => l.id === id);
+    setLiabilities(prev => prev.filter(l => l.id !== id));
+    await logActivity('LIABILITY_DELETE', 'Liability', target?.employeeName || id, `Deleted liability for ${target?.employeeName}`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'liabilities', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `liabilities/${id}`);
-      }
+    try {
+      await fetch(`/api/liabilities/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   // SETTINGS
   const updateSettings = async (newSettings: Partial<SystemSettings>) => {
-    const merged = { ...settings, ...newSettings };
-    setSettingsState(merged);
-    await logActivity('SETTINGS_UPDATE', 'Settings', 'global', `System settings updated`);
+    const updated = { ...settings, ...newSettings };
+    setSettingsState(updated);
+    await logActivity('SETTINGS_UPDATE', 'System', 'global', 'Updated system configuration parameters');
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'settings', 'global'), merged);
-      } catch (err) {
-        console.warn('Settings sync notice:', err);
-      }
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  // DROPDOWN & CATEGORY DATABASE MUTATIONS
+  // DROPDOWN & CATEGORY OPERATIONS
   const updateDropdownOptions = async (newOptions: Partial<DropdownOptionsConfig>) => {
-    const merged = { ...dropdownOptions, ...newOptions };
-    setDropdownOptionsState(merged);
-    await logActivity('DROPDOWNS_UPDATE', 'Settings', 'dropdowns', `Customized dropdown category options in database`);
+    const updated = { ...dropdownOptions, ...newOptions };
+    setDropdownOptionsState(updated);
+    await logActivity('DROPDOWN_UPDATE', 'Category', 'all', 'Updated dropdown category masters');
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'settings', 'dropdowns'), merged, { merge: true });
-        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: merged }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
-      }
+    try {
+      await fetch('/api/dropdown-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -857,129 +905,38 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const trimmed = value.trim();
     if (!trimmed) return;
     const currentList = dropdownOptions[categoryKey] || [];
-    if (currentList.some(item => item.toLowerCase() === trimmed.toLowerCase())) {
-      return; // Already exists
-    }
+    if (currentList.includes(trimmed)) return;
+
     const updatedList = [...currentList, trimmed];
     const updatedConfig = { ...dropdownOptions, [categoryKey]: updatedList };
-    setDropdownOptionsState(updatedConfig);
-    await logActivity('DROPDOWN_OPTION_ADD', 'Category', categoryKey, `Added "${trimmed}" to ${categoryKey} database list`);
-
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
-        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
-      }
-    }
+    await updateDropdownOptions(updatedConfig);
+    await logActivity('DROPDOWN_OPTION_ADD', 'Category', categoryKey, `Added "${trimmed}" to ${categoryKey}`);
   };
 
   const editDropdownOption = async (
-    categoryKey: keyof DropdownOptionsConfig, 
-    oldValue: string, 
-    newValue: string, 
+    categoryKey: keyof DropdownOptionsConfig,
+    oldValue: string,
+    newValue: string,
     updateExistingRecords = true
   ) => {
     const trimmedNew = newValue.trim();
-    if (!trimmedNew || trimmedNew === oldValue) return;
+    if (!trimmedNew || oldValue === trimmedNew) return;
+
     const currentList = dropdownOptions[categoryKey] || [];
     const updatedList = currentList.map(item => item === oldValue ? trimmedNew : item);
     const updatedConfig = { ...dropdownOptions, [categoryKey]: updatedList };
-    setDropdownOptionsState(updatedConfig);
+    await updateDropdownOptions(updatedConfig);
+    await logActivity('DROPDOWN_OPTION_EDIT', 'Category', categoryKey, `Renamed "${oldValue}" to "${trimmedNew}"`);
 
-    await logActivity('DROPDOWN_OPTION_EDIT', 'Category', categoryKey, `Renamed "${oldValue}" to "${trimmedNew}" in ${categoryKey}`);
-
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
-        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
-      }
-    }
-
-    // Cascade update existing records if requested
     if (updateExistingRecords) {
       if (categoryKey === 'departments') {
-        assets.forEach(a => {
-          if (a.department === oldValue) updateAsset(a.id, { department: trimmedNew });
-        });
-        onboardings.forEach(o => {
-          if (o.department === oldValue) updateOnboarding(o.id, { department: trimmedNew });
-        });
-        offboardings.forEach(o => {
-          if (o.department === oldValue) updateOffboarding(o.id, { department: trimmedNew });
-        });
-        requests.forEach(r => {
-          if (r.departmentOrBranches === oldValue) updateRequest(r.id, { departmentOrBranches: trimmedNew });
-        });
-        borrowings.forEach(b => {
-          if (b.department === oldValue) updateBorrowing(b.id, { department: trimmedNew });
-        });
-        preventiveMaintenance.forEach(p => {
-          if (p.department === oldValue) updatePreventiveMaintenance(p.id, { department: trimmedNew });
-        });
-        liabilities.forEach(l => {
-          if (l.department === oldValue) updateLiability(l.id, { department: trimmedNew });
-        });
+        assets.forEach(a => { if (a.department === oldValue) updateAsset(a.id, { department: trimmedNew }); });
+      } else if (categoryKey === 'branches') {
+        assets.forEach(a => { if (a.location === oldValue) updateAsset(a.id, { location: trimmedNew }); });
       } else if (categoryKey === 'assetCategories') {
-        assets.forEach(a => {
-          if (a.category === oldValue) updateAsset(a.id, { category: trimmedNew as any });
-        });
-        borrowings.forEach(b => {
-          if (b.itemCategory === oldValue) updateBorrowing(b.id, { itemCategory: trimmedNew });
-        });
+        assets.forEach(a => { if (a.category === oldValue) updateAsset(a.id, { category: trimmedNew }); });
       } else if (categoryKey === 'assetStatuses') {
-        assets.forEach(a => {
-          if (a.status === oldValue) updateAsset(a.id, { status: trimmedNew as any });
-        });
-      } else if (categoryKey === 'requestTypes') {
-        requests.forEach(r => {
-          if (r.requestType === oldValue) updateRequest(r.id, { requestType: trimmedNew as any });
-        });
-      } else if (categoryKey === 'requestStatuses') {
-        requests.forEach(r => {
-          if (r.status === oldValue) updateRequest(r.id, { status: trimmedNew as any });
-        });
-      } else if (categoryKey === 'onboardingStatuses') {
-        onboardings.forEach(o => {
-          if (o.status === oldValue) updateOnboarding(o.id, { status: trimmedNew as any });
-        });
-      } else if (categoryKey === 'offboardingStatuses') {
-        offboardings.forEach(o => {
-          if (o.status === oldValue) updateOffboarding(o.id, { status: trimmedNew as any });
-        });
-      } else if (categoryKey === 'borrowStatuses') {
-        borrowings.forEach(b => {
-          if (b.status === oldValue) updateBorrowing(b.id, { status: trimmedNew as any });
-        });
-      } else if (categoryKey === 'pmStatuses') {
-        preventiveMaintenance.forEach(p => {
-          if (p.status === oldValue) updatePreventiveMaintenance(p.id, { status: trimmedNew as any });
-        });
-      } else if (categoryKey === 'liabilityStatuses') {
-        liabilities.forEach(l => {
-          if (l.status === oldValue) updateLiability(l.id, { status: trimmedNew as any });
-        });
-      } else if (categoryKey === 'unitsOfMeasure') {
-        liabilities.forEach(l => {
-          if (l.uom === oldValue) updateLiability(l.id, { uom: trimmedNew });
-        });
-      } else if (categoryKey === 'companies') {
-        onboardings.forEach(o => {
-          if (o.company === oldValue) updateOnboarding(o.id, { company: trimmedNew });
-        });
-        offboardings.forEach(o => {
-          if (o.company === oldValue) updateOffboarding(o.id, { company: trimmedNew });
-        });
-        liabilities.forEach(l => {
-          if (l.company === oldValue) updateLiability(l.id, { company: trimmedNew });
-        });
-      } else if (categoryKey === 'locations') {
-        assets.forEach(a => {
-          if (a.location === oldValue) updateAsset(a.id, { location: trimmedNew });
-        });
+        assets.forEach(a => { if (a.status === oldValue) updateAsset(a.id, { status: trimmedNew as any }); });
       }
     }
   };
@@ -988,38 +945,18 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentList = dropdownOptions[categoryKey] || [];
     const updatedList = currentList.filter(item => item !== value);
     const updatedConfig = { ...dropdownOptions, [categoryKey]: updatedList };
-    setDropdownOptionsState(updatedConfig);
-
-    await logActivity('DROPDOWN_OPTION_DELETE', 'Category', categoryKey, `Removed "${value}" from ${categoryKey} list`);
-
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
-        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
-      }
-    }
+    await updateDropdownOptions(updatedConfig);
+    await logActivity('DROPDOWN_OPTION_DELETE', 'Category', categoryKey, `Removed "${value}" from ${categoryKey}`);
   };
 
   const resetDropdownCategoryToDefault = async (categoryKey: keyof DropdownOptionsConfig) => {
     const defaultList = DEFAULT_DROPDOWN_OPTIONS[categoryKey];
     const updatedConfig = { ...dropdownOptions, [categoryKey]: defaultList };
-    setDropdownOptionsState(updatedConfig);
-
+    await updateDropdownOptions(updatedConfig);
     await logActivity('DROPDOWN_CATEGORY_RESET', 'Category', categoryKey, `Reset ${categoryKey} to factory defaults`);
-
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'settings', 'dropdowns'), updatedConfig, { merge: true });
-        await setDoc(doc(db, 'settings', 'global'), { dropdownOptions: updatedConfig }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'settings/dropdowns');
-      }
-    }
   };
 
-  // KPI 2026 TARGET MEASUREMENTS OPERATIONS
+  // KPI 2026 OPERATIONS
   const updateKPI2026 = async (updates: Partial<KPITargets2026Data>) => {
     const merged: KPITargets2026Data = {
       ...kpi2026,
@@ -1027,174 +964,37 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
     setKpi2026(merged);
-    await logActivity('KPI_UPDATE', 'KPI2026', 'targets', 'Updated official IT 2026 Target Measurement records');
+    await logActivity('KPI_UPDATE', 'KPI2026', 'targets', 'Updated IT 2026 Target records');
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'kpi_records', '2026'), merged, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'kpi_records/2026');
-      }
+    try {
+      await fetch('/api/kpi-2026', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(merged),
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const resetKPI2026ToDefaults = async () => {
     setKpi2026(SEED_KPI_2026);
-    await logActivity('KPI_RESET', 'KPI2026', 'targets', 'Reset IT 2026 Target Measurement records to official baseline');
-
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'kpi_records', '2026'), SEED_KPI_2026);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'kpi_records/2026');
-      }
-    }
-  };
-
-  // 1-Click Seed Initial Data to Firebase
-  const seedInitialDataToFirebase = async () => {
-    if (!auth.currentUser) return;
+    await logActivity('KPI_RESET', 'KPI2026', 'targets', 'Reset IT 2026 Targets to baseline');
     try {
-      for (const a of SEED_ASSETS) {
-        await setDoc(doc(db, 'assets', a.id), a);
-      }
-      for (const o of SEED_ONBOARDINGS) {
-        await setDoc(doc(db, 'onboardings', o.id), o);
-      }
-      for (const off of SEED_OFFBOARDINGS) {
-        await setDoc(doc(db, 'offboardings', off.id), off);
-      }
-      for (const req of SEED_REQUESTS) {
-        await setDoc(doc(db, 'requests', req.id), req);
-      }
-      for (const b of SEED_BORROWINGS) {
-        await setDoc(doc(db, 'borrowings', b.id), b);
-      }
-      for (const pm of SEED_PREVENTIVE_MAINTENANCE) {
-        await setDoc(doc(db, 'preventive_maintenance', pm.id), pm);
-      }
-      for (const l of SEED_LIABILITIES) {
-        await setDoc(doc(db, 'liabilities', l.id), l);
-      }
-      for (const log of SEED_ACTIVITY_LOGS) {
-        await setDoc(doc(db, 'activity_logs', log.id), log);
-      }
-      // Seed Dropdown Category Master Data
-      await setDoc(doc(db, 'settings', 'dropdowns'), DEFAULT_DROPDOWN_OPTIONS);
-      await setDoc(doc(db, 'settings', 'global'), INITIAL_SETTINGS);
-      // Seed Official Measurement of Target - IT 2026
-      await setDoc(doc(db, 'kpi_records', '2026'), SEED_KPI_2026);
-
-      localStorage.removeItem(LOCAL_STORAGE_PREFIX + 'cleared');
-      await logActivity('DATABASE_SEED', 'System', 'all', 'Seeded initial enterprise dataset, dropdown categories, and 2026 KPI targets to Firebase');
+      await fetch('/api/kpi-2026', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(SEED_KPI_2026),
+      });
     } catch (err) {
-      console.error('Seeding error:', err);
+      console.error(err);
     }
   };
 
-  // Clear All System Data (Wipe Cloud Firestore database & start fresh)
-  const clearAllData = async () => {
-    localStorage.setItem(LOCAL_STORAGE_PREFIX + 'cleared', 'true');
-    setAssets([]);
-    setOnboardings([]);
-    setOffboardings([]);
-    setRequests([]);
-    setBorrowings([]);
-    setPreventiveMaintenance([]);
-    setLiabilities([]);
-    setActivityLogs([]);
-
-    if (auth.currentUser) {
-      const collectionsToWipe = [
-        'assets',
-        'onboardings',
-        'offboardings',
-        'requests',
-        'borrowings',
-        'preventive_maintenance',
-        'liabilities',
-        'activity_logs',
-      ];
-
-      for (const col of collectionsToWipe) {
-        try {
-          const snap = await getDocs(collection(db, col));
-          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col, d.id))));
-        } catch (err) {
-          console.warn(`Error clearing Cloud Firestore collection ${col}:`, err);
-        }
-      }
-    }
-
-    await logActivity('SYSTEM_CLEARED', 'CloudFirestore', 'all', 'All system data and inventory records cleared from Cloud Firestore');
-  };
-
-  // Clear Inventory Assets Only
-  const clearAssetsOnly = async () => {
-    setAssets([]);
-
-    if (auth.currentUser) {
-      try {
-        const snap = await getDocs(collection(db, 'assets'));
-        await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'assets', d.id))));
-      } catch (err) {
-        console.warn('Error clearing Cloud Firestore assets:', err);
-      }
-    }
-
-    await logActivity('ASSETS_CLEARED', 'CloudFirestore', 'assets', 'All inventory asset records cleared from Cloud Firestore');
-  };
-
-  // SECURE CLEAR ALL DATA WITH MASTER PASSWORD PROTECTION
-  const clearDataWithPassword = async (
-    password: string, 
-    clearScope: 'all' | 'assets' | 'requests' | 'borrowings'
-  ): Promise<{ success: boolean; message: string }> => {
-    const expectedPassword = settings.masterAdminPassword || 'ITAdmin@2026';
-    if (password !== expectedPassword) {
-      return { success: false, message: 'Invalid IT Admin Master Password. Access denied.' };
-    }
-
-    if (clearScope === 'all') {
-      await clearAllData();
-      return { success: true, message: 'All system records and inventory data wiped from Cloud Firestore.' };
-    } else if (clearScope === 'assets') {
-      await clearAssetsOnly();
-      return { success: true, message: 'All inventory asset records cleared from Cloud Firestore.' };
-    } else if (clearScope === 'requests') {
-      setRequests([]);
-      if (auth.currentUser) {
-        try {
-          const snap = await getDocs(collection(db, 'requests'));
-          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'requests', d.id))));
-        } catch (e) { console.warn(e); }
-      }
-      return { success: true, message: 'All PR and incident request records cleared from Cloud Firestore.' };
-    } else if (clearScope === 'borrowings') {
-      setBorrowings([]);
-      if (auth.currentUser) {
-        try {
-          const snap = await getDocs(collection(db, 'borrowings'));
-          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'borrowings', d.id))));
-        } catch (e) { console.warn(e); }
-      }
-      return { success: true, message: 'All borrowing records cleared from Cloud Firestore.' };
-    }
-    return { success: false, message: 'Unknown clear scope.' };
-  };
-
-  // ROLE & USER PERMISSIONS
-  const setUserRole = (role: UserRole) => {
-    setCurrentUser(prev => ({ ...prev, role }));
-  };
-
-  // AUTO-CALCULATE & SYNC KPI DATA FROM LIVE SYSTEM (PMS, REPAIRS, NETSUITE)
   const autoSyncKPIFromSystem = async (): Promise<KPITargets2026Data> => {
-    // 1. Calculate PMS completed from assets
     const pmsDoneFirstHalf = assets.filter(a => a.pmsCompleted && (a.pmsHalf === '1st Half' || a.pmsHalf === 'Both')).length;
     const pmsDoneSecondHalf = assets.filter(a => a.pmsCompleted && (a.pmsHalf === '2nd Half' || a.pmsHalf === 'Both')).length;
 
-    // 2. Location-based breakdown for PMS
     const locationTargets: Record<string, { planned: number; actualDoneFirstHalf: number; actualDoneSecondHalf: number }> = {
       ...(kpi2026.pms.locationTargets || {})
     };
@@ -1237,7 +1037,6 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return updated;
   };
 
-  // ADD & DELETE ORIENTATION SESSIONS
   const addOrientationSession = async (session: Omit<OrientationSessionLog, 'id' | 'createdAt'>) => {
     const id = `ori-${Date.now()}`;
     const newSession: OrientationSessionLog = { ...session, id, createdAt: new Date().toISOString() };
@@ -1273,7 +1072,6 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateKPI2026({ orientationSessions: updatedSessions });
   };
 
-  // ADD & DELETE NETSUITE CONCERNS WITH SCREENSHOT SUPPORT
   const addNetsuiteConcern = async (concern: Omit<NetsuiteConcernLog, 'id' | 'createdAt'>) => {
     const id = `ns-${Date.now()}`;
     const newConcern: NetsuiteConcernLog = { ...concern, id, createdAt: new Date().toISOString() };
@@ -1309,13 +1107,111 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateKPI2026({ netsuiteConcerns: updatedConcerns });
   };
 
-  // Backup snapshots - direct export
+  // Seed Initial Data to Supabase
+  const seedInitialDataToSupabase = async () => {
+    try {
+      const res = await fetch('/api/seed', { method: 'POST' });
+      if (res.ok) {
+        await refreshFromSupabase();
+        await logActivity('DATABASE_SEED', 'Supabase', 'all', 'Seeded initial enterprise dataset to Supabase PostgreSQL');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const seedInitialDataToFirebase = seedInitialDataToSupabase; // Alias for backward compatibility
+
+  // Clear All Data
+  const clearAllData = async () => {
+    setAssets([]);
+    setOnboardings([]);
+    setOffboardings([]);
+    setRequests([]);
+    setBorrowings([]);
+    setPreventiveMaintenance([]);
+    setLiabilities([]);
+    setActivityLogs([]);
+
+    try {
+      await fetch('/api/clear-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'ITAdmin@2026', scope: 'all' })
+      });
+      await logActivity('SYSTEM_CLEARED', 'Supabase', 'all', 'All system data and inventory records cleared from Supabase');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const clearAssetsOnly = async () => {
+    setAssets([]);
+    try {
+      await fetch('/api/clear-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'ITAdmin@2026', scope: 'assets' })
+      });
+      await logActivity('ASSETS_CLEARED', 'Supabase', 'assets', 'All inventory asset records cleared from Supabase');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const clearDataWithPassword = async (
+    password: string, 
+    clearScope: 'all' | 'assets' | 'requests' | 'borrowings'
+  ): Promise<{ success: boolean; message: string }> => {
+    const expectedPassword = settings.masterAdminPassword || 'ITAdmin@2026';
+    if (password !== expectedPassword) {
+      return { success: false, message: 'Invalid IT Admin Master Password. Access denied.' };
+    }
+
+    try {
+      const res = await fetch('/api/clear-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, scope: clearScope })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (clearScope === 'all') {
+          setAssets([]);
+          setOnboardings([]);
+          setOffboardings([]);
+          setRequests([]);
+          setBorrowings([]);
+          setPreventiveMaintenance([]);
+          setLiabilities([]);
+          setActivityLogs([]);
+        } else if (clearScope === 'assets') {
+          setAssets([]);
+        } else if (clearScope === 'requests') {
+          setRequests([]);
+        } else if (clearScope === 'borrowings') {
+          setBorrowings([]);
+        }
+        return { success: true, message: data.message || 'Data wiped from Supabase successfully.' };
+      }
+      return { success: false, message: data.message || 'Operation failed.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error.' };
+    }
+  };
+
+  // ROLE & USER PERMISSIONS
+  const setUserRole = (role: UserRole) => {
+    setCurrentUser(prev => ({ ...prev, role }));
+  };
+
+  // Backup & Restore
   const createBackupSnapshot = () => {
     const snapshot = {
       timestamp: new Date().toISOString(),
       version: '1.0.0',
       system: 'ITM Pro Enterprise Cloud',
-      database: CLOUD_DATABASE_ID,
+      database: 'Supabase PostgreSQL (' + SUPABASE_HOST + ')',
       company: settings.companyName,
       data: {
         assets,
@@ -1336,64 +1232,27 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ITM_CloudFirestore_Backup_${new Date().toISOString().substring(0, 10)}.json`;
+    a.download = `ITM_Supabase_Backup_${new Date().toISOString().substring(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
 
     updateSettings({ lastBackupDate: new Date().toISOString() });
-    logActivity('BACKUP_EXPORT', 'CloudFirestore', 'snapshot', 'Created full JSON snapshot backup of Cloud Firestore database');
+    logActivity('BACKUP_EXPORT', 'Supabase', 'snapshot', 'Created full JSON snapshot backup of Supabase database');
   };
 
-  // Restore directly into Cloud Firestore
   const restoreBackupSnapshot = async (jsonData: string) => {
     try {
       const parsed = JSON.parse(jsonData);
-      if (parsed.data && auth.currentUser) {
-        if (parsed.data.assets && Array.isArray(parsed.data.assets)) {
-          for (const a of parsed.data.assets) {
-            await setDoc(doc(db, 'assets', a.id), a);
-          }
+      if (parsed.data) {
+        const res = await fetch('/api/restore-backup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: parsed.data })
+        });
+        if (res.ok) {
+          await refreshFromSupabase();
+          await logActivity('BACKUP_RESTORE', 'Supabase', 'snapshot', 'Restored ITM database directly into Supabase');
         }
-        if (parsed.data.onboardings && Array.isArray(parsed.data.onboardings)) {
-          for (const o of parsed.data.onboardings) {
-            await setDoc(doc(db, 'onboardings', o.id), o);
-          }
-        }
-        if (parsed.data.offboardings && Array.isArray(parsed.data.offboardings)) {
-          for (const off of parsed.data.offboardings) {
-            await setDoc(doc(db, 'offboardings', off.id), off);
-          }
-        }
-        if (parsed.data.requests && Array.isArray(parsed.data.requests)) {
-          for (const r of parsed.data.requests) {
-            await setDoc(doc(db, 'requests', r.id), r);
-          }
-        }
-        if (parsed.data.borrowings && Array.isArray(parsed.data.borrowings)) {
-          for (const b of parsed.data.borrowings) {
-            await setDoc(doc(db, 'borrowings', b.id), b);
-          }
-        }
-        if (parsed.data.preventiveMaintenance && Array.isArray(parsed.data.preventiveMaintenance)) {
-          for (const p of parsed.data.preventiveMaintenance) {
-            await setDoc(doc(db, 'preventive_maintenance', p.id), p);
-          }
-        }
-        if (parsed.data.liabilities && Array.isArray(parsed.data.liabilities)) {
-          for (const l of parsed.data.liabilities) {
-            await setDoc(doc(db, 'liabilities', l.id), l);
-          }
-        }
-        if (parsed.data.dropdownOptions) {
-          await setDoc(doc(db, 'settings', 'dropdowns'), parsed.data.dropdownOptions, { merge: true });
-        }
-        if (parsed.data.settings) {
-          await setDoc(doc(db, 'settings', 'global'), parsed.data.settings, { merge: true });
-        }
-        if (parsed.data.kpi2026) {
-          await setDoc(doc(db, 'kpi_records', '2026'), parsed.data.kpi2026, { merge: true });
-        }
-        await logActivity('BACKUP_RESTORE', 'CloudFirestore', 'snapshot', 'Restored ITM database directly into Cloud Firestore');
       }
     } catch (err) {
       console.error('Failed to parse backup JSON:', err);
@@ -1461,21 +1320,28 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logActivity,
         updateSettings,
         seedInitialDataToFirebase,
+        seedInitialDataToSupabase,
         clearAllData,
         clearAssetsOnly,
         clearDataWithPassword,
         createBackupSnapshot,
         restoreBackupSnapshot,
+        refreshFromSupabase,
         currentUser,
         setCurrentUser,
         setUserRole,
+        signInWithGoogleWorkspace,
+        logoutGoogleWorkspace,
+        isGoogleWorkspaceLoggedIn,
         language,
         setLanguage,
         t,
         isOnline,
-        isFirebaseConnected,
+        isFirebaseConnected: isSupabaseConnected,
+        isSupabaseConnected,
+        supabaseHost: SUPABASE_HOST,
         isCloudLoading,
-        cloudDatabaseId: CLOUD_DATABASE_ID,
+        cloudDatabaseId: SUPABASE_HOST,
         alerts,
         markAlertRead,
         clearAllAlerts,

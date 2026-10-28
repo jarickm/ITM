@@ -14,7 +14,9 @@ import {
   X,
   Database,
   UserCheck,
-  Cloud
+  Cloud,
+  LogOut,
+  RefreshCw
 } from 'lucide-react';
 import { useITM } from '../context/ITMContext';
 import { UserRole, LanguageCode } from '../types/itm';
@@ -32,15 +34,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
     setLanguage, 
     t, 
     isOnline, 
-    isFirebaseConnected,
-    isCloudLoading,
-    cloudDatabaseId,
+    isSupabaseConnected,
+    supabaseHost,
+    signInWithGoogleWorkspace,
+    logoutGoogleWorkspace,
+    isGoogleWorkspaceLoggedIn,
     alerts,
     markAlertRead,
     clearAllAlerts,
     quickSearchQuery,
     setQuickSearchQuery,
-    seedInitialDataToFirebase
+    seedInitialDataToSupabase
   } = useITM();
 
   const [showAlertsDropdown, setShowAlertsDropdown] = useState(false);
@@ -63,9 +67,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
     setShowLangDropdown(false);
   };
 
-  const handleSeedFirebase = async () => {
+  const handleSeedSupabase = async () => {
     setIsSeeding(true);
-    await seedInitialDataToFirebase();
+    await seedInitialDataToSupabase();
     setIsSeeding(false);
   };
 
@@ -113,6 +117,37 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
 
       {/* Actions & Status */}
       <div className="flex items-center gap-2">
+        {/* Google Workspace Sign-In Button */}
+        {!isGoogleWorkspaceLoggedIn ? (
+          <button
+            onClick={signInWithGoogleWorkspace}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold shadow-xs transition-all active:scale-95"
+            title="Sign in with your Google Workspace Account"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.14z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.33 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+            </svg>
+            <span className="hidden sm:inline">Workspace Sign In</span>
+          </button>
+        ) : (
+          <div 
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-[11px] text-indigo-800 font-medium"
+            title={`Signed in as ${currentUser.email} via Google Workspace`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.14z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.33 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+            </svg>
+            <span className="hidden sm:inline font-semibold">Workspace</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          </div>
+        )}
+
         {/* Quick QR & Barcode Scanner Button */}
         <button
           onClick={onOpenScanner}
@@ -123,26 +158,26 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
           <span className="hidden md:inline">{t('quickScan')}</span>
         </button>
 
-        {/* Authoritative Cloud Database Status */}
+        {/* Authoritative Supabase Cloud Database Status */}
         <div 
           className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 font-semibold shadow-2xs"
-          title={`100% Cloud Database: Google Cloud Firestore (${cloudDatabaseId}). Real-time live replication across all devices and sessions. No local database.`}
+          title={`Supabase PostgreSQL Database (${supabaseHost}). Auto-created tables with real-time syncing.`}
         >
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Cloud Database: {isFirebaseConnected ? 'Connected' : 'Connecting...'}</span>
-          <span className="hidden xl:inline text-[10px] text-emerald-600 font-mono font-normal">Firestore</span>
+          <Database className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Supabase: {isSupabaseConnected ? 'Connected' : 'Connecting...'}</span>
+          <span className="hidden xl:inline text-[10px] text-emerald-600 font-mono font-normal">PostgreSQL</span>
         </div>
 
-        {/* Cloud Database Re-Seed Button */}
+        {/* Supabase Re-Seed Button */}
         <button
-          onClick={handleSeedFirebase}
+          onClick={handleSeedSupabase}
           disabled={isSeeding}
           className="hidden xl:flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[11px] text-slate-700 font-medium transition-colors"
-          title="Re-populate cloud Firestore collections with enterprise baseline records"
+          title="Re-populate Supabase PostgreSQL tables with enterprise baseline records"
         >
-          <Database className="w-3 h-3 text-indigo-600" />
-          <span>{isSeeding ? 'Syncing...' : 'Seed Cloud DB'}</span>
+          <RefreshCw className={`w-3 h-3 text-indigo-600 ${isSeeding ? 'animate-spin' : ''}`} />
+          <span>{isSeeding ? 'Syncing...' : 'Seed Supabase'}</span>
         </button>
 
         {/* Notification Bell Dropdown */}
@@ -305,8 +340,35 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
                 </button>
               ))}
 
+              <div className="pt-2 mt-2 border-t border-slate-100">
+                {isGoogleWorkspaceLoggedIn ? (
+                  <button
+                    onClick={() => {
+                      setShowRoleDropdown(false);
+                      logoutGoogleWorkspace();
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-slate-100 text-left font-semibold text-xs transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                      Sign Out (Google Workspace)
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowRoleDropdown(false);
+                      signInWithGoogleWorkspace();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-indigo-700 hover:bg-indigo-50 text-left font-semibold text-xs transition-colors"
+                  >
+                    <span>Sign in with Google Workspace</span>
+                  </button>
+                )}
+              </div>
+
               {onOpenClearModal && currentUser.role === 'Super Admin' && (
-                <div className="pt-2 mt-2 border-t border-slate-100">
+                <div className="pt-1 mt-1 border-t border-slate-100">
                   <button
                     onClick={() => {
                       setShowRoleDropdown(false);

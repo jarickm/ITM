@@ -413,32 +413,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'dropdo
             </div>
           </div>
 
-          {/* Cloud Firestore Central Database Card */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50/80 via-slate-50 to-emerald-50/50 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+          {/* Supabase PostgreSQL Central Database Card */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-slate-50 to-indigo-50/50 border border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
             <div className="space-y-1">
               <div className="font-bold text-slate-900 flex items-center gap-2">
-                <Cloud className="w-4 h-4 text-indigo-600" />
-                <span>Authoritative Database: Google Cloud Firestore</span>
+                <Database className="w-4 h-4 text-emerald-600" />
+                <span>Authoritative Cloud Database: Supabase (PostgreSQL)</span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {isFirebaseConnected ? 'Connected & Live' : 'Connecting...'}
+                  <span>Connected & Live Sync</span>
                 </span>
               </div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
-                Database ID: <code className="font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">{cloudDatabaseId}</code>
+                Host: <code className="font-mono text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200">aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres</code>
               </p>
               <p className="text-slate-500 text-[11px]">
-                Pure cloud operational mode. All asset records, requests, borrowing transactions, PMS diagnostics, NetSuite tickets, and 2026 KPI targets are stored centrally in Google Cloud Firestore.
+                Pure Supabase database mode. All 11 PostgreSQL schemas (assets, onboardings, offboardings, requests, borrowings, PM, liabilities, activity logs, settings, dropdowns, and 2026 KPI targets) are auto-created and synchronized.
               </p>
             </div>
             <button
               type="button"
               onClick={handleSeed}
               disabled={seeding}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all text-xs shrink-0 shadow-xs"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-all text-xs shrink-0 shadow-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${seeding ? 'animate-spin' : ''}`} />
-              <span>{seeding ? 'Syncing...' : 'Reload Enterprise Dataset'}</span>
+              <span>{seeding ? 'Syncing...' : 'Seed Supabase Tables'}</span>
             </button>
           </div>
 

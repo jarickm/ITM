@@ -1,12 +1,11 @@
 {
-  "projectId": "third-clarity-5w2pc",
-  "appId": "1:332486443923:web:2731cd6c6bc07f38ae1e66",
-  "apiKey": "AIzaSyAN3D829VrMnz-6zFSchqxd448l2aqz-o4",
-  "authDomain": "third-clarity-5w2pc.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-45434206-acd2-49a2-98df-17c3dd190ec0",
-  "storageBucket": "third-clarity-5w2pc.firebasestorage.app",
-  "messagingSenderId": "332486443923",
+  "projectId": "gen-lang-client-0406286086",
+  "appId": "1:1043438653090:web:8d5a9aecc0299211fd51fb",
+  "apiKey": "AIzaSyDOnKrjTdnMqwKMtL5QdBaiEIaVkPXEDiI",
+  "authDomain": "gen-lang-client-0406286086.firebaseapp.com",
+  "storageBucket": "gen-lang-client-0406286086.firebasestorage.app",
+  "messagingSenderId": "1043438653090",
   "measurementId": "",
-  "oAuthClientId": "332486443923-uftro09pc4fjhh3quv4dh9u0llf0a598.apps.googleusercontent.com",
+  "oAuthClientId": "1043438653090-jhcqg1cvo6mrkdp30jgs3a0bt66bi68g.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

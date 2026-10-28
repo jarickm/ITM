@@ -1,6 +1,6 @@
 {
   "name": "ITM Pro - IT Asset & Operations Management System",
-  "description": "Comprehensive enterprise IT Asset Management (ITAM), inventory tracking, onboarding/offboarding, PR/IER request desk, borrowing tracker, preventive maintenance, liability custody records, and real-time KPI analytics powered by Firebase.",
+  "description": "Comprehensive enterprise IT Asset Management (ITAM), inventory tracking, onboarding/offboarding, PR/IER request desk, borrowing tracker, preventive maintenance, liability custody records, and real-time KPI analytics powered by Supabase PostgreSQL and Google Workspace.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
