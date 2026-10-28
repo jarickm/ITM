@@ -273,14 +273,14 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          if (Array.isArray(data.assets) && data.assets.length > 0) setAssets(data.assets);
-          if (Array.isArray(data.onboardings)) setOnboardings(data.onboardings);
-          if (Array.isArray(data.offboardings)) setOffboardings(data.offboardings);
-          if (Array.isArray(data.requests)) setRequests(data.requests);
-          if (Array.isArray(data.borrowings)) setBorrowings(data.borrowings);
-          if (Array.isArray(data.preventiveMaintenance)) setPreventiveMaintenance(data.preventiveMaintenance);
-          if (Array.isArray(data.liabilities)) setLiabilities(data.liabilities);
-          if (Array.isArray(data.activityLogs)) setActivityLogs(data.activityLogs);
+          if (Array.isArray(data.assets)) setAssets(data.assets.filter(Boolean));
+          if (Array.isArray(data.onboardings)) setOnboardings(data.onboardings.filter(Boolean));
+          if (Array.isArray(data.offboardings)) setOffboardings(data.offboardings.filter(Boolean));
+          if (Array.isArray(data.requests)) setRequests(data.requests.filter(Boolean));
+          if (Array.isArray(data.borrowings)) setBorrowings(data.borrowings.filter(Boolean));
+          if (Array.isArray(data.preventiveMaintenance)) setPreventiveMaintenance(data.preventiveMaintenance.filter(Boolean));
+          if (Array.isArray(data.liabilities)) setLiabilities(data.liabilities.filter(Boolean));
+          if (Array.isArray(data.activityLogs)) setActivityLogs(data.activityLogs.filter(Boolean));
           if (data.settings) setSettingsState(data.settings);
           if (data.dropdownOptions) setDropdownOptionsState(data.dropdownOptions);
           if (data.kpi2026) setKpi2026(data.kpi2026);
@@ -418,13 +418,19 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('ASSET_CREATE', 'Asset', newAsset.assetCode, `Created asset ${newAsset.employeeOrDeviceName} (${newAsset.assetCode})`);
 
     try {
-      await fetch('/api/assets', {
+      const res = await fetch('/api/assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newAsset),
       });
-    } catch (err) {
-      console.error('Asset creation error:', err);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to save asset to Supabase');
+      }
+      setTimeout(() => refreshFromSupabase(), 300);
+    } catch (err: any) {
+      console.error('[Asset creation error]:', err);
+      throw err;
     }
     return id;
   };
@@ -438,13 +444,19 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('ASSET_UPDATE', 'Asset', target?.assetCode || id, `Updated asset fields: ${Object.keys(updates).join(', ')}`);
 
     try {
-      await fetch(`/api/assets/${id}`, {
+      const res = await fetch(`/api/assets/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
-    } catch (err) {
-      console.error('Asset update error:', err);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to update asset in Supabase');
+      }
+      setTimeout(() => refreshFromSupabase(), 300);
+    } catch (err: any) {
+      console.error('[Asset update error]:', err);
+      throw err;
     }
   };
 
@@ -454,9 +466,15 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('ASSET_DELETE', 'Asset', target?.assetCode || id, `Deleted asset ${target?.employeeOrDeviceName}`);
 
     try {
-      await fetch(`/api/assets/${id}`, { method: 'DELETE' });
-    } catch (err) {
-      console.error('Asset delete error:', err);
+      const res = await fetch(`/api/assets/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to delete asset from Supabase');
+      }
+      setTimeout(() => refreshFromSupabase(), 300);
+    } catch (err: any) {
+      console.error('[Asset delete error]:', err);
+      throw err;
     }
   };
 
@@ -565,13 +583,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('ONBOARDING_CREATE', 'Onboarding', newRec.employeeName, `Created onboarding for ${newRec.employeeName} (${newRec.position})`);
 
     try {
-      await fetch('/api/onboardings', {
+      const res = await fetch('/api/onboardings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRec),
       });
+      if (!res.ok) throw new Error('Failed to save onboarding to Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
     return id;
   };
@@ -585,13 +606,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('ONBOARDING_UPDATE', 'Onboarding', target?.employeeName || id, `Updated onboarding for ${target?.employeeName}`);
 
     try {
-      await fetch(`/api/onboardings/${id}`, {
+      const res = await fetch(`/api/onboardings/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error('Failed to update onboarding in Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -601,9 +625,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('ONBOARDING_DELETE', 'Onboarding', target?.employeeName || id, `Deleted onboarding for ${target?.employeeName}`);
 
     try {
-      await fetch(`/api/onboardings/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/onboardings/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete onboarding from Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -617,13 +644,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('OFFBOARDING_CREATE', 'Offboarding', newRec.employeeName, `Created offboarding for ${newRec.employeeName}`);
 
     try {
-      await fetch('/api/offboardings', {
+      const res = await fetch('/api/offboardings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRec),
       });
+      if (!res.ok) throw new Error('Failed to save offboarding to Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
     return id;
   };
@@ -637,13 +667,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('OFFBOARDING_UPDATE', 'Offboarding', target?.employeeName || id, `Updated offboarding for ${target?.employeeName}`);
 
     try {
-      await fetch(`/api/offboardings/${id}`, {
+      const res = await fetch(`/api/offboardings/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error('Failed to update offboarding in Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -653,9 +686,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('OFFBOARDING_DELETE', 'Offboarding', target?.employeeName || id, `Deleted offboarding for ${target?.employeeName}`);
 
     try {
-      await fetch(`/api/offboardings/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/offboardings/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete offboarding from Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -669,13 +705,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('REQUEST_CREATE', 'Request', newRec.referenceNo, `Created ${newRec.requestType} ticket: ${newRec.actionsTakenOrRemarks || newRec.departmentOrBranches}`);
 
     try {
-      await fetch('/api/requests', {
+      const res = await fetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRec),
       });
+      if (!res.ok) throw new Error('Failed to save request to Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
     return id;
   };
@@ -689,13 +728,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('REQUEST_UPDATE', 'Request', target?.referenceNo || id, `Updated request ticket ${target?.referenceNo || id}`);
 
     try {
-      await fetch(`/api/requests/${id}`, {
+      const res = await fetch(`/api/requests/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error('Failed to update request in Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -705,9 +747,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('REQUEST_DELETE', 'Request', target?.referenceNo || id, `Deleted request ticket ${target?.referenceNo || id}`);
 
     try {
-      await fetch(`/api/requests/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/requests/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete request from Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -721,13 +766,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('BORROWING_CREATE', 'Borrowing', newRec.borrowerName, `Borrowed ${newRec.itemCategory} by ${newRec.borrowerName}`);
 
     try {
-      await fetch('/api/borrowings', {
+      const res = await fetch('/api/borrowings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRec),
       });
+      if (!res.ok) throw new Error('Failed to save borrowing to Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
     return id;
   };
@@ -741,13 +789,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('BORROWING_UPDATE', 'Borrowing', target?.borrowerName || id, `Updated borrowing for ${target?.borrowerName}`);
 
     try {
-      await fetch(`/api/borrowings/${id}`, {
+      const res = await fetch(`/api/borrowings/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error('Failed to update borrowing in Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -757,9 +808,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('BORROWING_DELETE', 'Borrowing', target?.borrowerName || id, `Deleted borrowing for ${target?.borrowerName}`);
 
     try {
-      await fetch(`/api/borrowings/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/borrowings/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete borrowing from Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -773,13 +827,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('PM_CREATE', 'PreventiveMaintenance', newRec.assetCode, `Logged maintenance for ${newRec.assetCode}`);
 
     try {
-      await fetch('/api/preventive-maintenance', {
+      const res = await fetch('/api/preventive-maintenance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRec),
       });
+      if (!res.ok) throw new Error('Failed to save maintenance to Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
     return id;
   };
@@ -793,13 +850,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('PM_UPDATE', 'PreventiveMaintenance', target?.assetCode || id, `Updated maintenance for ${target?.assetCode}`);
 
     try {
-      await fetch(`/api/preventive-maintenance/${id}`, {
+      const res = await fetch(`/api/preventive-maintenance/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error('Failed to update maintenance in Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -809,9 +869,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('PM_DELETE', 'PreventiveMaintenance', target?.assetCode || id, `Deleted maintenance for ${target?.assetCode}`);
 
     try {
-      await fetch(`/api/preventive-maintenance/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/preventive-maintenance/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete maintenance from Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -825,13 +888,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('LIABILITY_CREATE', 'Liability', newRec.employeeName, `Created liability for ${newRec.employeeName}: ${newRec.itemDescription}`);
 
     try {
-      await fetch('/api/liabilities', {
+      const res = await fetch('/api/liabilities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRec),
       });
+      if (!res.ok) throw new Error('Failed to save liability to Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
     return id;
   };
@@ -845,13 +911,16 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('LIABILITY_UPDATE', 'Liability', target?.employeeName || id, `Updated liability for ${target?.employeeName}`);
 
     try {
-      await fetch(`/api/liabilities/${id}`, {
+      const res = await fetch(`/api/liabilities/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error('Failed to update liability in Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
@@ -861,9 +930,12 @@ export const ITMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logActivity('LIABILITY_DELETE', 'Liability', target?.employeeName || id, `Deleted liability for ${target?.employeeName}`);
 
     try {
-      await fetch(`/api/liabilities/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/liabilities/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete liability from Supabase');
+      setTimeout(() => refreshFromSupabase(), 300);
     } catch (err) {
       console.error(err);
+      throw err;
     }
   };
 
