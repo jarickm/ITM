@@ -18,17 +18,50 @@ import {
   SEED_KPI_2026 
 } from './src/data/seedData.ts';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.byasmykumlpzrldseest:Coolaire%40502022@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres';
+
+function parseDatabaseUrl(raw: string): string {
+  let cleaned = raw.trim();
+  // Handle double @ if password contains unencoded @
+  const atCount = (cleaned.match(/@/g) || []).length;
+  if (atCount > 1) {
+    const lastAtIdx = cleaned.lastIndexOf('@');
+    const pre = cleaned.substring(0, lastAtIdx);
+    const post = cleaned.substring(lastAtIdx + 1);
+    const fixedPre = pre.replace(/^postgresql:\/\/([^:]+):?/, (_m, user) => {
+      return `postgresql://${user}:`;
+    }).replace(/(?<=:[^@]*?)@/g, '%40');
+    cleaned = `${fixedPre}@${post}`;
+  }
+
+  // Handle direct db.<project>.supabase.co:
+  // Supabase direct hosts resolve to IPv6-only addresses.
+  // In IPv4 environments (such as cloud containers), we map to Supabase's official IPv4 pooler gateway.
+  const match = cleaned.match(/postgresql:\/\/([^:]+):([^@]+)@db\.([a-z0-9]+)\.supabase\.co(?::\d+)?\/(.*)/);
+  if (match) {
+    const [, user, pass, projectRef, db] = match;
+    const cleanUser = user.includes('.') ? user : `${user}.${projectRef}`;
+    return `postgresql://${cleanUser}:${pass}@aws-0-ap-northeast-1.pooler.supabase.com:5432/${db || 'postgres'}`;
+  }
+  return cleaned;
+}
+
+const DEFAULT_SUPABASE = 'postgresql://postgres:Coolaire%40502022@db.byasmykumlpzrldseest.supabase.co:5432/postgres';
+let envUrl = process.env.DATABASE_URL || '';
+if (!envUrl.startsWith('postgresql://') && !envUrl.startsWith('postgres://')) {
+  envUrl = DEFAULT_SUPABASE;
+}
+const RAW_DATABASE_URL = envUrl;
+const RESOLVED_DATABASE_URL = parseDatabaseUrl(RAW_DATABASE_URL);
 
 export const pool = new Pool({
-  connectionString: DATABASE_URL,
+  connectionString: RESOLVED_DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   },
@@ -393,11 +426,13 @@ async function startServer() {
   // Status & Health Endpoint
   app.get('/api/status', async (_req: Request, res: Response) => {
     try {
-      const q = await pool.query('SELECT NOW() as now, COUNT(*) as asset_count FROM assets;');
+      const q = await pool.query('SELECT NOW() as now, COUNT(*) as asset_count FROM assets WHERE data IS NOT NULL;');
+      const parsedHost = RAW_DATABASE_URL.match(/@([^:/]+)/)?.[1] || 'db.byasmykumlpzrldseest.supabase.co';
       res.json({
         success: true,
-        database: 'Supabase PostgreSQL',
-        host: 'aws-0-ap-northeast-1.pooler.supabase.com',
+        database: 'Supabase PostgreSQL (Main Database)',
+        host: parsedHost,
+        directHost: 'db.byasmykumlpzrldseest.supabase.co:5432',
         timestamp: q.rows[0].now,
         assetCount: parseInt(q.rows[0].asset_count, 10),
       });
@@ -964,8 +999,9 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
+    const parsedHost = RAW_DATABASE_URL.match(/@([^:/]+)/)?.[1] || 'db.byasmykumlpzrldseest.supabase.co';
     console.log(`[Server] ITM Pro Enterprise running on http://0.0.0.0:${PORT}`);
-    console.log(`[Server] Connected to Supabase PostgreSQL at aws-0-ap-northeast-1.pooler.supabase.com:5432`);
+    console.log(`[Server] Connected to main Supabase PostgreSQL at ${parsedHost}:5432`);
   });
 }
 

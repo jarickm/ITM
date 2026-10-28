@@ -425,7 +425,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'dropdo
                 </span>
               </div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
-                Host: <code className="font-mono text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200">aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres</code>
+                Host: <code className="font-mono text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200">db.byasmykumlpzrldseest.supabase.co:5432/postgres</code>
               </p>
               <p className="text-slate-500 text-[11px]">
                 Pure Supabase database mode. All 11 PostgreSQL schemas (assets, onboardings, offboardings, requests, borrowings, PM, liabilities, activity logs, settings, dropdowns, and 2026 KPI targets) are auto-created and synchronized.
