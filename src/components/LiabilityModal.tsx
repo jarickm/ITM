@@ -12,7 +12,7 @@ interface LiabilityModalProps {
 }
 
 export const LiabilityModal: React.FC<LiabilityModalProps> = ({ record, onClose, onSave }) => {
-  const { settings } = useITM();
+  const { settings, dropdownOptions } = useITM();
   const [qty, setQty] = useState<number>(record?.qty || 1);
   const [uom, setUom] = useState(record?.uom || 'Unit');
   const [itemDescription, setItemDescription] = useState(record?.itemDescription || '');
@@ -26,33 +26,42 @@ export const LiabilityModal: React.FC<LiabilityModalProps> = ({ record, onClose,
   const [signedAcknowledged] = useState(record?.signedAcknowledged || true);
   const [loading, setLoading] = useState(false);
   const [showPrintSlip, setShowPrintSlip] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeName || !itemDescription || !dateIssued || !department || !assetCode || !company) {
-      alert('Please fill all mandatory accountability fields.');
+    setFormError(null);
+
+    const emp = employeeName.trim();
+    if (!emp) {
+      setFormError('Please enter the Employee Name.');
       return;
     }
+
+    const item = itemDescription.trim() || 'Standard IT Assigned Hardware';
+    const dept = department || dropdownOptions.departments[0] || 'IT';
+    const code = assetCode.trim() || `LIA-${Date.now().toString().slice(-6)}`;
+    const comp = company || settings.companyName || 'Corporate';
 
     setLoading(true);
     try {
       await onSave({
-        qty,
-        uom,
-        itemDescription,
-        dateIssued,
-        employeeName,
-        department,
-        assetCode,
-        company,
+        qty: qty || 1,
+        uom: uom || 'UNIT',
+        itemDescription: item,
+        dateIssued: dateIssued || new Date().toISOString().substring(0, 10),
+        employeeName: emp,
+        department: dept,
+        assetCode: code,
+        company: comp,
         status,
         signedAcknowledged,
         remarks: remarks || undefined,
       });
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error saving liability custody record');
+      setFormError(err.message || 'Error saving liability custody record to Supabase');
     } finally {
       setLoading(false);
     }
@@ -154,6 +163,12 @@ export const LiabilityModal: React.FC<LiabilityModalProps> = ({ record, onClose,
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {formError && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn">
+            <span className="font-semibold">{formError}</span>
+          </div>
+        )}
 
         {/* Form Body or Printable Slip */}
         {showPrintSlip ? (

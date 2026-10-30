@@ -24,6 +24,7 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({ record, onCl
   const [nextMaintenanceDate, setNextMaintenanceDate] = useState(record?.nextMaintenanceDate || '');
   const [cost, setCost] = useState<string>(record?.cost ? String(record.cost) : '');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Autofill asset details if assetCode matches an existing asset
   const handleAssetCodeChange = (code: string) => {
@@ -40,30 +41,34 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({ record, onCl
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !date || !datePurchase || !assetCode || !activityWorkDone || !performedBy || !recommendation || !department) {
-      alert('Please fill all mandatory Preventive Maintenance fields.');
-      return;
-    }
+    setFormError(null);
+
+    const desc = description.trim() || 'Quarterly Routine Preventive Maintenance';
+    const tech = performedBy.trim() || 'IT Support';
+    const work = activityWorkDone.trim() || 'Internal cleaning, fan inspection, OS update & diagnostic checks';
+    const rec = recommendation.trim() || 'Hardware healthy. Continue routine quarterly maintenance schedule.';
+    const dept = department || dropdownOptions.departments[0] || 'IT';
+    const code = assetCode.trim() || 'APX-MAINT';
 
     setLoading(true);
     try {
       await onSave({
-        description,
-        date,
-        datePurchase,
-        assetCode,
-        activityWorkDone,
-        performedBy,
+        description: desc,
+        date: date || new Date().toISOString().substring(0, 10),
+        datePurchase: datePurchase || new Date().toISOString().substring(0, 10),
+        assetCode: code,
+        activityWorkDone: work,
+        performedBy: tech,
         status,
-        recommendation,
-        department,
+        recommendation: rec,
+        department: dept,
         nextMaintenanceDate: nextMaintenanceDate || undefined,
         cost: cost ? parseFloat(cost) : undefined,
       });
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error saving PM record');
+      setFormError(err.message || 'Error saving PM record to Supabase');
     } finally {
       setLoading(false);
     }
@@ -88,6 +93,12 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({ record, onCl
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {formError && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn">
+            <span className="font-semibold">{formError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

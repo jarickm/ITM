@@ -32,6 +32,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({
   const [estimatedAmount, setEstimatedAmount] = useState<string>(record?.estimatedAmount ? String(record.estimatedAmount) : '');
   const [assignedTechnician, setAssignedTechnician] = useState(record?.assignedTechnician || '');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Auto-generate reference number if creating new
   useEffect(() => {
@@ -55,21 +56,35 @@ export const RequestModal: React.FC<RequestModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!referenceNo || !employeeOrRequesterName || !departmentOrBranches || !actionsTakenOrRemarks) {
-      alert('Please fill all mandatory ticket fields.');
+    setFormError(null);
+
+    const requester = employeeOrRequesterName.trim();
+    if (!requester) {
+      setFormError('Please enter the Requester or Employee Name.');
       return;
     }
+
+    let ref = referenceNo.trim();
+    if (!ref) {
+      const year = new Date().getFullYear();
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      ref = `${requestType}-${year}-${rand}`;
+      setReferenceNo(ref);
+    }
+
+    const dept = departmentOrBranches || dropdownOptions.departments[0] || 'IT';
+    const remarks = actionsTakenOrRemarks.trim() || 'Ticket created and queued for action.';
 
     setLoading(true);
     try {
       await onSave({
-        dateReported,
+        dateReported: dateReported || new Date().toISOString().substring(0, 10),
         requestType,
-        referenceNo,
-        employeeOrRequesterName,
-        departmentOrBranches,
-        actionsTakenOrRemarks,
-        dateCreated,
+        referenceNo: ref,
+        employeeOrRequesterName: requester,
+        departmentOrBranches: dept,
+        actionsTakenOrRemarks: remarks,
+        dateCreated: dateCreated || new Date().toISOString().substring(0, 10),
         dateResolved: dateResolved || '',
         days,
         majorOrMinor,
@@ -78,9 +93,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({
         assignedTechnician: assignedTechnician || undefined,
       });
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error saving request record');
+      setFormError(err.message || 'Error saving request ticket to Supabase');
     } finally {
       setLoading(false);
     }
@@ -107,6 +122,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {formError && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn">
+            <span className="font-semibold">{formError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

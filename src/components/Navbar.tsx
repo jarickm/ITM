@@ -44,7 +44,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
     clearAllAlerts,
     quickSearchQuery,
     setQuickSearchQuery,
-    seedInitialDataToSupabase
+    seedInitialDataToSupabase,
+    refreshFromSupabase,
+    isCloudLoading
   } = useITM();
 
   const [showAlertsDropdown, setShowAlertsDropdown] = useState(false);
@@ -168,6 +170,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenScanner, onOpenClearModal 
           <span>Supabase: {isSupabaseConnected ? 'Connected' : 'Connecting...'}</span>
           <span className="hidden xl:inline text-[10px] text-emerald-600 font-mono font-normal">PostgreSQL</span>
         </div>
+
+        {/* Live Sync / Pull from Supabase Button */}
+        <button
+          onClick={() => refreshFromSupabase()}
+          disabled={isCloudLoading}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-semibold transition-all active:scale-95"
+          title="Manually pull fresh data directly from Supabase PostgreSQL"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isCloudLoading ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">{isCloudLoading ? 'Syncing...' : 'Sync Live'}</span>
+        </button>
 
         {/* Supabase Re-Seed Button */}
         <button

@@ -22,31 +22,38 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({ record, onClose, onSav
   const [status, setStatus] = useState<BorrowStatus>(record?.status || 'Active / Borrowed');
   const [remarks, setRemarks] = useState(record?.remarks || '');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!borrowerName || !department || !itemCategory || !borrowDate || !returnDate) {
-      alert('Please fill all mandatory loan tracking fields.');
+    setFormError(null);
+
+    const borrower = borrowerName.trim();
+    if (!borrower) {
+      setFormError('Please enter the Borrower Name.');
       return;
     }
+
+    const dept = department || dropdownOptions.departments[0] || 'IT';
+    const cat = itemCategory || dropdownOptions.assetCategories[0] || 'Laptop';
 
     setLoading(true);
     try {
       await onSave({
-        borrowerName,
-        department,
-        itemCategory,
+        borrowerName: borrower,
+        department: dept,
+        itemCategory: cat,
         assetCode: assetCode || undefined,
-        borrowDate,
-        returnDate,
+        borrowDate: borrowDate || new Date().toISOString().substring(0, 10),
+        returnDate: returnDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10),
         actualReturnDate: actualReturnDate || undefined,
         status,
-        remarks,
+        remarks: remarks.trim() || 'Equipment loan issued',
       });
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error saving equipment loan');
+      setFormError(err.message || 'Error saving equipment loan to Supabase');
     } finally {
       setLoading(false);
     }
@@ -71,6 +78,12 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({ record, onClose, onSav
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {formError && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn">
+            <span className="font-semibold">{formError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

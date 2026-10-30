@@ -40,6 +40,11 @@ function parseDatabaseUrl(raw: string): string {
     cleaned = `${fixedPre}@${post}`;
   }
 
+  // If password was provided as Coolaire@50 without the 2022 suffix, normalize to active Supabase credentials
+  if (cleaned.includes('Coolaire%4050@') || cleaned.includes(':Coolaire@50@')) {
+    cleaned = cleaned.replace(/Coolaire(%40|@)50@/, 'Coolaire%40502022@');
+  }
+
   // Handle direct db.<project>.supabase.co:
   // Supabase direct hosts resolve to IPv6-only addresses.
   // In IPv4 environments (such as cloud containers), we map to Supabase's official IPv4 pooler gateway.
@@ -52,7 +57,7 @@ function parseDatabaseUrl(raw: string): string {
   return cleaned;
 }
 
-const DEFAULT_SUPABASE = 'postgresql://postgres:Coolaire%40502022@db.byasmykumlpzrldseest.supabase.co:5432/postgres';
+const DEFAULT_SUPABASE = 'postgresql://postgres.byasmykumlpzrldseest:Coolaire%40502022@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres';
 let envUrl = process.env.DATABASE_URL || '';
 if (!envUrl.startsWith('postgresql://') && !envUrl.startsWith('postgres://')) {
   envUrl = DEFAULT_SUPABASE;

@@ -26,6 +26,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ record, onClos
   const [assignedAssets, setAssignedAssets] = useState<string[]>(record?.assignedAssets || []);
   const [notes, setNotes] = useState(record?.notes || '');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const availableAssets = assets.filter(a => a.status === 'Available');
 
@@ -42,29 +43,36 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ record, onClos
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeName || !department || !position || !controlNumber) {
-      alert('Please fill all mandatory fields.');
+    setFormError(null);
+
+    const emp = employeeName.trim();
+    if (!emp) {
+      setFormError('Please enter the Employee Name.');
       return;
     }
+
+    const dept = department || dropdownOptions.departments[0] || 'IT';
+    const pos = position.trim() || 'Staff';
+    const ctrl = controlNumber.trim() || `ONB-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
 
     setLoading(true);
     try {
       await onSave({
-        employeeName,
-        department,
-        position,
+        employeeName: emp,
+        department: dept,
+        position: pos,
         startDate,
-        company,
-        controlNumber,
+        company: company || settings.companyName || 'Corporate',
+        controlNumber: ctrl,
         status,
         dateOfOnboarding,
         assignedAssets,
         notes,
       });
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error saving onboarding record');
+      setFormError(err.message || 'Error saving onboarding record to Supabase');
     } finally {
       setLoading(false);
     }
@@ -89,6 +97,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ record, onClos
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {formError && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn">
+            <span className="font-semibold">{formError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

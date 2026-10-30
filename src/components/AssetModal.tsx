@@ -34,6 +34,7 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
   const [pmsTechnician, setPmsTechnician] = useState(asset?.pmsTechnician || '');
   const [pmsRemarks, setPmsRemarks] = useState(asset?.pmsRemarks || '');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!asset && !assetCode) {
@@ -59,18 +60,35 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeOrDeviceName || !assetCode || !specificationOrSN) {
-      alert('Please complete all required fields.');
+    setFormError(null);
+
+    const devName = employeeOrDeviceName.trim();
+    if (!devName) {
+      setFormError('Please enter the Device Name or Assigned Employee.');
       return;
+    }
+
+    let code = assetCode.trim();
+    if (!code) {
+      const year = new Date().getFullYear();
+      const rand = Math.floor(100 + Math.random() * 900);
+      code = `APX-${year}-${rand}`;
+      setAssetCode(code);
+    }
+
+    let spec = specificationOrSN.trim();
+    if (!spec) {
+      spec = `SN-${Date.now().toString().slice(-8)}`;
+      setSpecificationOrSN(spec);
     }
 
     setLoading(true);
     try {
       await onSave({
-        employeeOrDeviceName,
+        employeeOrDeviceName: devName,
         category,
-        specificationOrSN,
-        assetCode,
+        specificationOrSN: spec,
+        assetCode: code,
         status,
         department,
         purchaseDate,
@@ -89,9 +107,9 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
         pmsRemarks: pmsCompleted ? pmsRemarks : undefined,
       });
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Save error:', err);
-      alert('Failed to save asset. Please verify input data.');
+      setFormError(err.message || 'Failed to save asset to Supabase database. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -122,6 +140,14 @@ export const AssetModal: React.FC<AssetModalProps> = ({ asset, onClose, onSave }
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Inline Error Alert Banner */}
+        {formError && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-semibold">{formError}</span>
+          </div>
+        )}
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
